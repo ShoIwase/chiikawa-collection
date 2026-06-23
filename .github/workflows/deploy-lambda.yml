@@ -1,0 +1,73 @@
+name: Deploy Lambda
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lambda/**"
+      - ".github/workflows/deploy-lambda.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: lambda/api/package-lock.json
+
+      - name: Install and build API Lambda
+        working-directory: lambda/api
+        run: |
+          npm ci
+          npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-1
+
+      - name: Deploy API Lambda
+        working-directory: lambda/api
+        run: |
+          zip -j chiikawa-api.zip dist/handler.js
+          aws lambda update-function-code \
+            --function-name chiikawa-api \
+            --zip-file fileb://chiikawa-api.zip
+
+  deploy-scraper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install and package Scraper Lambda
+        working-directory: lambda/scraper
+        run: |
+          pip install -r requirements.txt -t package/
+          cp *.py package/
+          cd package && zip -r ../chiikawa-scraper.zip .
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-1
+
+      - name: Deploy Scraper Lambda
+        working-directory: lambda/scraper
+        run: |
+          aws lambda update-function-code \
+            --function-name chiikawa-scraper \
+            --zip-file fileb://chiikawa-scraper.zip
