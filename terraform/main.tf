@@ -197,8 +197,14 @@ resource "aws_dynamodb_table" "chiikawa_master" {
   hash_key     = "Category"
   range_key    = "ItemName"
 
-  attribute { name = "Category"; type = "S" }
-  attribute { name = "ItemName"; type = "S" }
+  attribute {
+    name = "Category"
+    type = "S"
+  }
+  attribute {
+    name = "ItemName"
+    type = "S"
+  }
 
   point_in_time_recovery { enabled = true }
 }
@@ -209,8 +215,14 @@ resource "aws_dynamodb_table" "user_collection" {
   hash_key     = "FamilyID"
   range_key    = "ItemName"
 
-  attribute { name = "FamilyID"; type = "S" }
-  attribute { name = "ItemName"; type = "S" }
+  attribute {
+    name = "FamilyID"
+    type = "S"
+  }
+  attribute {
+    name = "ItemName"
+    type = "S"
+  }
 
   point_in_time_recovery { enabled = true }
 }
@@ -222,7 +234,11 @@ resource "aws_iam_role" "chiikawa_api" {
   name = "chiikawa-api-lambda-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{ Effect = "Allow"; Principal = { Service = "lambda.amazonaws.com" }; Action = "sts:AssumeRole" }]
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
   })
 }
 
@@ -248,7 +264,11 @@ resource "aws_iam_role" "chiikawa_scraper" {
   name = "chiikawa-scraper-lambda-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{ Effect = "Allow"; Principal = { Service = "lambda.amazonaws.com" }; Action = "sts:AssumeRole" }]
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
   })
 }
 
@@ -263,23 +283,36 @@ resource "aws_iam_role_policy" "chiikawa_scraper_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      { Effect = "Allow"; Action = ["dynamodb:Query", "dynamodb:GetItem", "dynamodb:PutItem"]; Resource = [aws_dynamodb_table.chiikawa_master.arn] },
-      { Effect = "Allow"; Action = ["s3:PutObject"]; Resource = "${aws_s3_bucket.chiikawa_images.arn}/*" },
+      {
+        Effect   = "Allow"
+        Action   = ["dynamodb:Query", "dynamodb:GetItem", "dynamodb:PutItem"]
+        Resource = [aws_dynamodb_table.chiikawa_master.arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = "${aws_s3_bucket.chiikawa_images.arn}/*"
+      },
     ]
   })
 }
 
 # ---------------------------------------------------------------------------
-# Lambda: API (TypeScript / Node.js 20)
+# Lambda: API (Java 21 + SnapStart)
 # ---------------------------------------------------------------------------
 resource "aws_lambda_function" "chiikawa_api" {
   function_name = "chiikawa-api"
   role          = aws_iam_role.chiikawa_api.arn
-  runtime       = "nodejs20.x"
-  handler       = "handler.lambdaHandler"
-  filename      = "${path.module}/lambda_packages/chiikawa-api.zip"
+  runtime       = "java21"
+  handler       = "com.shoiwase.chiikawa.api.ApiHandler"
+  filename      = "${path.module}/lambda_packages/chiikawa-api.jar"
   timeout       = 30
-  memory_size   = 256
+  memory_size   = 512
+  publish       = true
+
+  snap_start {
+    apply_on = "PublishedVersions"
+  }
 
   environment {
     variables = {
@@ -292,10 +325,20 @@ resource "aws_lambda_function" "chiikawa_api" {
   lifecycle { ignore_changes = [filename, source_code_hash] }
 }
 
+# SnapStart はバージョン単位で有効になるため alias 経由で API GW からコールする
+resource "aws_lambda_alias" "chiikawa_api_live" {
+  name             = "live"
+  function_name    = aws_lambda_function.chiikawa_api.function_name
+  function_version = aws_lambda_function.chiikawa_api.version
+
+  lifecycle { ignore_changes = [function_version] }
+}
+
 resource "aws_lambda_permission" "chiikawa_api_apigw" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.chiikawa_api.function_name
+  qualifier     = aws_lambda_alias.chiikawa_api_live.name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.chiikawa.execution_arn}/*/*"
 }
@@ -382,7 +425,7 @@ resource "aws_apigatewayv2_authorizer" "chiikawa_cognito" {
 resource "aws_apigatewayv2_integration" "chiikawa_api" {
   api_id                 = aws_apigatewayv2_api.chiikawa.id
   integration_type       = "AWS_PROXY"
-  integration_uri        = aws_lambda_function.chiikawa_api.invoke_arn
+  integration_uri        = aws_lambda_alias.chiikawa_api_live.arn
   payload_format_version = "2.0"
 }
 
