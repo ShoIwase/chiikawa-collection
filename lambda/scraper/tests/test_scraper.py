@@ -18,35 +18,46 @@ TARGET_URL    = "https://www.jp-api.com/contents/NOD62/"
 # fetch_items
 # ---------------------------------------------------------------------------
 
+# jp-api.com の実際の HTML 構造に合わせたサンプル
+# 商品名は a.lightbox の title 属性、画像 URL は href 属性
 SAMPLE_HTML = """
 <html><body>
-  <div class="item">
-    <a href="/item/1">
-      <h3>北海道 ダイカットキーホルダー</h3>
-      <img src="/images/hokkaido.jpg" />
-    </a>
+  <div class="item_box_3">
+    <p class="img_023 img">
+      <a class="lightbox" href="/images/hokkaido.png" title="北海道 ダイカットキーホルダー">
+        <img src="/images/hokkaido.png" alt="北海道 ダイカットキーホルダー" />
+      </a>
+    </p>
   </div>
-  <div class="item">
-    <a href="/item/2">
-      <h3>東京 缶バッジ</h3>
-      <img src="/images/tokyo_badge.jpg" />
-    </a>
+  <div class="item_box_3">
+    <p class="img_023 img">
+      <a class="lightbox" href="/images/tokyo_badge.png" title="東京 缶バッジ">
+        <img src="/images/tokyo_badge.png" alt="東京 缶バッジ" />
+      </a>
+    </p>
   </div>
-  <div class="item">
-    <a href="/item/3">
-      <h3>箱根 ダイカットキーホルダー ハチワレver</h3>
-      <img src="/images/hakone.jpg" />
-    </a>
+  <div class="item_box_3">
+    <p class="img_023 img">
+      <a class="lightbox" href="/images/hakone.png" title="箱根 ダイカットキーホルダー ハチワレver">
+        <img src="/images/hakone.png" alt="箱根 ダイカットキーホルダー ハチワレver" />
+      </a>
+    </p>
   </div>
 </body></html>
 """
+
+
+def _sjis(html: str) -> bytes:
+    """テスト用: HTML 文字列を Shift-JIS バイト列に変換する。"""
+    return html.encode("shift_jis")
 
 
 class TestFetchItems:
 
     @resp_mock.activate
     def test_filters_keychain_items_only(self):
-        resp_mock.add(resp_mock.GET, TARGET_URL, body=SAMPLE_HTML, status=200)
+        # scraper は Shift-JIS でデコードするためバイト列で渡す
+        resp_mock.add(resp_mock.GET, TARGET_URL, body=_sjis(SAMPLE_HTML), status=200)
 
         items = fetch_items(TARGET_URL)
 
@@ -56,14 +67,14 @@ class TestFetchItems:
 
     @resp_mock.activate
     def test_returns_two_keychain_items(self):
-        resp_mock.add(resp_mock.GET, TARGET_URL, body=SAMPLE_HTML, status=200)
+        resp_mock.add(resp_mock.GET, TARGET_URL, body=_sjis(SAMPLE_HTML), status=200)
 
         items = fetch_items(TARGET_URL)
         assert len(items) == 2
 
     @resp_mock.activate
     def test_image_url_is_absolute(self):
-        resp_mock.add(resp_mock.GET, TARGET_URL, body=SAMPLE_HTML, status=200)
+        resp_mock.add(resp_mock.GET, TARGET_URL, body=_sjis(SAMPLE_HTML), status=200)
 
         items = fetch_items(TARGET_URL)
         for item in items:
@@ -72,7 +83,8 @@ class TestFetchItems:
 
     @resp_mock.activate
     def test_empty_page_returns_empty_list(self):
-        resp_mock.add(resp_mock.GET, TARGET_URL, body="<html><body></body></html>", status=200)
+        resp_mock.add(resp_mock.GET, TARGET_URL,
+                      body="<html><body></body></html>".encode("shift_jis"), status=200)
 
         items = fetch_items(TARGET_URL)
         assert items == []
