@@ -12,11 +12,17 @@ public final class Db {
             .region(Region.AP_NORTHEAST_1)
             .build();
 
-    public static final String MASTER_TABLE     = System.getenv("MASTER_TABLE");
-    public static final String COLLECTION_TABLE = System.getenv("COLLECTION_TABLE");
-    public static final String FAMILY_ID        = System.getenv("FAMILY_ID");
+    public static final String MASTER_TABLE     = env("MASTER_TABLE");
+    public static final String COLLECTION_TABLE = env("COLLECTION_TABLE");
+    public static final String FAMILY_ID        = env("FAMILY_ID");
 
     private Db() {}
+
+    /** 環境変数を取得し、未設定の場合はシステムプロパティにフォールバック（テスト用）。 */
+    private static String env(String key) {
+        String v = System.getenv(key);
+        return v != null ? v : System.getProperty(key, "");
+    }
 
     public static String str(Map<String, AttributeValue> item, String key) {
         AttributeValue v = item.get(key);
