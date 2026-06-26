@@ -160,5 +160,12 @@ class TestGuessMotif:
     def test_usagi(self):
         assert _guess_motif("東京 ダイカットキーホルダー うさぎ") == "うさぎ"
 
+    def test_momonga_katakana(self):
+        assert _guess_motif("那覇 ダイカットキーホルダー モモンガ") == "モモンガ"
+
+    def test_momonga_romaji_returns_katakana(self):
+        # "momonga" (ローマ字) も "モモンガ" として統一
+        assert _guess_motif("那覇 ダイカットキーホルダー momonga") == "モモンガ"
+
     def test_default_is_chiikawa(self):
         assert _guess_motif("沖縄 ダイカットキーホルダー") == "ちいかわ"
