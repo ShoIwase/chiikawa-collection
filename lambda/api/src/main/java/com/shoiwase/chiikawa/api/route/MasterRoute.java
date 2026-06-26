@@ -27,7 +27,7 @@ public class MasterRoute {
     }
 
     // テスト用: モッククライアントを注入
-    MasterRoute(DynamoDbClient client) {
+    public MasterRoute(DynamoDbClient client) {
         this.client = client;
     }
 

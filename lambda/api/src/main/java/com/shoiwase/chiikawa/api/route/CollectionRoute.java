@@ -28,7 +28,7 @@ public class CollectionRoute {
     }
 
     // テスト用: モッククライアントを注入
-    CollectionRoute(DynamoDbClient client) {
+    public CollectionRoute(DynamoDbClient client) {
         this.client = client;
     }
 
