@@ -93,9 +93,16 @@ def _collect_pages(top_url: str) -> list[str]:
 
 
 def _guess_motif(name: str) -> str:
-    for motif in ["ちいかわ", "ハチワレ", "うさぎ", "くりまんじゅう", "momonga", "モモンガ"]:
-        if motif in name:
-            return motif
+    if "ちいかわ" in name:
+        return "ちいかわ"
+    if "ハチワレ" in name:
+        return "ハチワレ"
+    if "うさぎ" in name:
+        return "うさぎ"
+    if "くりまんじゅう" in name:
+        return "くりまんじゅう"
+    if "モモンガ" in name or "momonga" in name.lower():
+        return "モモンガ"
     return "ちいかわ"
 
 
