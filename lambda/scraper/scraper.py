@@ -11,8 +11,11 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-IMAGES_BUCKET: str = os.environ["IMAGES_BUCKET"]
-_s3 = boto3.client("s3")
+def _get_images_bucket() -> str:
+    return os.environ["IMAGES_BUCKET"]
+
+def _get_s3():
+    return boto3.client("s3")
 
 KEYCHAIN_KEYWORD = "ダイカットキーホルダー"
 _HEADERS = {
@@ -108,11 +111,12 @@ def download_image_to_s3(image_url: str, item_name: str) -> str:
     content_type = resp.headers.get("Content-Type", "image/jpeg")
     data = io.BytesIO(resp.content)
 
-    _s3.upload_fileobj(
+    bucket = _get_images_bucket()
+    _get_s3().upload_fileobj(
         data,
-        IMAGES_BUCKET,
+        bucket,
         s3_key,
         ExtraArgs={"ContentType": content_type},
     )
-    logger.info("Uploaded image to s3://%s/%s", IMAGES_BUCKET, s3_key)
+    logger.info("Uploaded image to s3://%s/%s", bucket, s3_key)
     return s3_key
