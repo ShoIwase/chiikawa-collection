@@ -34,56 +34,31 @@ class ScrapedItem:
 
 
 def fetch_items(target_url: str) -> list[ScrapedItem]:
-    """対象URLからダイカットキーホルダー商品を取得する。"""
+    """対象URLからダイカットキーホルダー商品を取得する。
+
+    jp-api.com の HTML 構造:
+      <a class="lightbox" href="/images/xxx_b.png" title="商品名">
+        <img src="/images/xxx_b.png" alt="商品名" />
+      </a>
+    商品名は title 属性に格納されており、ページは Shift-JIS エンコード。
+    """
     resp = requests.get(target_url, headers=_HEADERS, timeout=30)
     resp.raise_for_status()
+    # Shift-JIS ページを正しくデコード
+    resp.encoding = "shift_jis"
     soup = BeautifulSoup(resp.text, "html.parser")
 
     items: list[ScrapedItem] = []
 
-    # 商品リンクを探索: href に商品IDが含まれるもの
-    # jp-api.com の構造: 商品名がテキストノード、画像が img タグ
-    for product in soup.select(".item, .product, article, [class*='item'], [class*='product']"):
-        name_el = product.find(["h2", "h3", "h4", "p", "span"], string=re.compile(KEYCHAIN_KEYWORD))
-        if name_el is None:
-            # 子要素のテキストに含まれるか確認
-            if KEYCHAIN_KEYWORD not in product.get_text():
-                continue
-            # テキスト全体から商品名を抽出
-            text = product.get_text(separator=" ").strip()
-            lines = [l.strip() for l in text.splitlines() if KEYCHAIN_KEYWORD in l]
-            if not lines:
-                continue
-            item_name = lines[0]
-        else:
-            item_name = name_el.get_text(strip=True)
-
-        img_el = product.find("img")
-        if img_el is None:
-            continue
-        img_src = img_el.get("src") or img_el.get("data-src") or ""
-        if not img_src:
+    # a.lightbox の title 属性が商品名、href が画像 URL
+    for a in soup.select("a.lightbox"):
+        item_name = a.get("title", "").strip()
+        if not item_name or KEYCHAIN_KEYWORD not in item_name:
             continue
 
-        # 相対URLを絶対URLに変換
-        img_url = urllib.parse.urljoin(target_url, img_src)
-
-        # モチーフ: ちいかわ / ハチワレ / うさぎ などを名前から推測
+        img_url = urllib.parse.urljoin(target_url, a.get("href", ""))
         motif = _guess_motif(item_name)
-
         items.append(ScrapedItem(item_name=item_name, image_url_original=img_url, motif=motif))
-
-    if not items:
-        # フォールバック: ページ内でキーワードを含む全 <a> タグを検索
-        for a in soup.find_all("a"):
-            text = a.get_text(strip=True)
-            if KEYCHAIN_KEYWORD not in text:
-                continue
-            img_el = a.find("img")
-            img_src = (img_el.get("src") or img_el.get("data-src") or "") if img_el else ""
-            img_url = urllib.parse.urljoin(target_url, img_src) if img_src else ""
-            motif = _guess_motif(text)
-            items.append(ScrapedItem(item_name=text, image_url_original=img_url, motif=motif))
 
     logger.info("Scraped %d keychain items", len(items))
     return items
