@@ -5,6 +5,7 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shoiwase.chiikawa.api.Db;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
 import java.net.URLDecoder;
@@ -19,6 +20,17 @@ import static com.shoiwase.chiikawa.api.ApiHandler.err;
 public class CollectionRoute {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    private final DynamoDbClient client;
+
+    public CollectionRoute() {
+        this.client = Db.CLIENT;
+    }
+
+    // テスト用: モッククライアントを注入
+    CollectionRoute(DynamoDbClient client) {
+        this.client = client;
+    }
 
     public APIGatewayV2HTTPResponse getItems() throws Exception {
         List<Map<String, AttributeValue>> masterItems = queryAllMasterVerified();
@@ -56,7 +68,7 @@ public class CollectionRoute {
         Object owned = body.get("owned");
         if (!(owned instanceof Boolean)) return err(400, "owned must be boolean");
 
-        Db.CLIENT.updateItem(UpdateItemRequest.builder()
+        client.updateItem(UpdateItemRequest.builder()
                 .tableName(Db.COLLECTION_TABLE)
                 .key(Map.of(
                         "FamilyID", AttributeValue.fromS(Db.FAMILY_ID),
@@ -86,7 +98,7 @@ public class CollectionRoute {
                             ":v",   AttributeValue.fromBool(true)))
                     .exclusiveStartKey(lastKey)
                     .build();
-            var resp = Db.CLIENT.query(req);
+            var resp = client.query(req);
             result.addAll(resp.items());
             lastKey = resp.lastEvaluatedKey().isEmpty() ? null : resp.lastEvaluatedKey();
         } while (lastKey != null);
@@ -105,7 +117,7 @@ public class CollectionRoute {
 
         for (int i = 0; i < keys.size(); i += 100) {
             List<Map<String, AttributeValue>> chunk = keys.subList(i, Math.min(i + 100, keys.size()));
-            var resp = Db.CLIENT.batchGetItem(BatchGetItemRequest.builder()
+            var resp = client.batchGetItem(BatchGetItemRequest.builder()
                     .requestItems(Map.of(
                             Db.COLLECTION_TABLE, KeysAndAttributes.builder().keys(chunk).build()))
                     .build());

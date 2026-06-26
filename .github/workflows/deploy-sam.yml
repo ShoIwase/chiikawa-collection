@@ -15,7 +15,40 @@ permissions:
   contents: read
 
 jobs:
+  test-java:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "corretto"
+          cache: "maven"
+
+      - name: Run Java tests (unit + integration)
+        working-directory: lambda/api
+        run: mvn test
+
+  test-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        working-directory: lambda/scraper
+        run: pip install -r requirements-dev.txt -q
+
+      - name: Run Python tests
+        working-directory: lambda/scraper
+        run: pytest tests/ -v --tb=short
+
   deploy:
+    needs: [test-java, test-python]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

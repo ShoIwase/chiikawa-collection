@@ -5,6 +5,7 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shoiwase.chiikawa.api.Db;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
 import java.net.URLDecoder;
@@ -19,6 +20,17 @@ public class MasterRoute {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private final DynamoDbClient client;
+
+    public MasterRoute() {
+        this.client = Db.CLIENT;
+    }
+
+    // テスト用: モッククライアントを注入
+    MasterRoute(DynamoDbClient client) {
+        this.client = client;
+    }
+
     public APIGatewayV2HTTPResponse getPendingItems() throws Exception {
         List<Map<String, AttributeValue>> items = new ArrayList<>();
         Map<String, AttributeValue> lastKey = null;
@@ -32,7 +44,7 @@ public class MasterRoute {
                             ":v",   AttributeValue.fromBool(false)))
                     .exclusiveStartKey(lastKey)
                     .build();
-            var resp = Db.CLIENT.query(req);
+            var resp = client.query(req);
             items.addAll(resp.items());
             lastKey = resp.lastEvaluatedKey().isEmpty() ? null : resp.lastEvaluatedKey();
         } while (lastKey != null);
@@ -78,7 +90,7 @@ public class MasterRoute {
             values.put(":motif", AttributeValue.fromS((String) body.get("motif")));
         }
 
-        Db.CLIENT.updateItem(UpdateItemRequest.builder()
+        client.updateItem(UpdateItemRequest.builder()
                 .tableName(Db.MASTER_TABLE)
                 .key(Map.of(
                         "Category", AttributeValue.fromS("KeyChain"),
