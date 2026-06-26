@@ -9,7 +9,7 @@ data "aws_route53_zone" "main" {
 # CloudFront 用ワイルドカード証明書 (us-east-1 で発行済み)
 data "aws_acm_certificate" "cloudfront" {
   provider    = aws.us_east_1
-  domain      = "*.${var.domain_name}"
+  domain      = var.domain_name
   statuses    = ["ISSUED"]
   most_recent = true
 }

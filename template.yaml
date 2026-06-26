@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: chiikawa-collection - Lambda functions and API Gateway
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: ルートドメイン名 (例: bar504.net)
+  MasterTableName:
+    Type: String
+    Default: ChiikawaMaster
+  CollectionTableName:
+    Type: String
+    Default: UserCollection
+  FamilyId:
+    Type: String
+    Default: shoiwase
+  # Terraform が SSM に書き込んだ値を参照
+  CognitoUserPoolId:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /chiikawa/cognito-user-pool-id
+  CognitoClientId:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /chiikawa/cognito-client-id
+
+Globals:
+  Function:
+    Environment:
+      Variables:
+        MASTER_TABLE:     !Ref MasterTableName
+        COLLECTION_TABLE: !Ref CollectionTableName
+        FAMILY_ID:        !Ref FamilyId
+
+Resources:
+
+  # ---------------------------------------------------------------------------
+  # API Gateway HTTP API (Cognito JWT 認証)
+  # ---------------------------------------------------------------------------
+  ChiikawaHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+      Auth:
+        DefaultAuthorizer: CognitoJwt
+        Authorizers:
+          CognitoJwt:
+            JwtConfiguration:
+              issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPoolId}"
+              audience:
+                - !Ref CognitoClientId
+            IdentitySource: "$request.header.Authorization"
+      CorsConfiguration:
+        AllowOrigins:
+          - !Sub "https://chiikawa.${DomainName}"
+        AllowMethods:
+          - GET
+          - PUT
+          - OPTIONS
+        AllowHeaders:
+          - Authorization
+          - Content-Type
+        MaxAge: 300
+
+  # ---------------------------------------------------------------------------
+  # API Lambda: Java 21 + SnapStart
+  # ---------------------------------------------------------------------------
+  ChiikawaApiFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: java21
+    Properties:
+      FunctionName: chiikawa-api
+      CodeUri: lambda/api/
+      Handler: com.shoiwase.chiikawa.api.ApiHandler
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      SnapStart:
+        ApplyOn: PublishedVersions
+      AutoPublishAlias: live
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:BatchGetItem
+              Resource:
+                - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MasterTableName}"
+                - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CollectionTableName}"
+      Events:
+        GetItems:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ChiikawaHttpApi
+            Path: /items
+            Method: GET
+        GetPending:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ChiikawaHttpApi
+            Path: /items/pending
+            Method: GET
+        UpdateStatus:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ChiikawaHttpApi
+            Path: /items/{itemName}/status
+            Method: PUT
+        VerifyItem:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ChiikawaHttpApi
+            Path: /items/{itemName}/verify
+            Method: PUT
+
+  # ---------------------------------------------------------------------------
+  # Scraper Lambda: Python 3.12
+  # ---------------------------------------------------------------------------
+  ChiikawaScraperFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: chiikawa-scraper
+      CodeUri: lambda/scraper/
+      Handler: handler.lambda_handler
+      Runtime: python3.12
+      MemorySize: 512
+      Timeout: 300
+      Environment:
+        Variables:
+          IMAGES_BUCKET: !Sub "chiikawa-images-${AWS::AccountId}"
+          TARGET_URL: "https://www.jp-api.com/contents/NOD62/"
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MasterTableName}"
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub "arn:aws:s3:::chiikawa-images-${AWS::AccountId}/*"
+      Events:
+        DailySchedule:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: "cron(0 0 * * ? *)"
+            Description: "毎日 9:00 JST にスクレイピング実行"
+
+  # ---------------------------------------------------------------------------
+  # SAM デプロイ後に API URL を SSM に書き込む (frontend CI が参照)
+  # ---------------------------------------------------------------------------
+  ApiUrlParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /chiikawa/api-url
+      Type: String
+      Value: !Sub "https://${ChiikawaHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway エンドポイント
+    Value: !Sub "https://${ChiikawaHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
