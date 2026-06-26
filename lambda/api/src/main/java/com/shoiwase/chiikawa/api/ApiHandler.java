@@ -37,10 +37,19 @@ public class ApiHandler implements RequestHandler<APIGatewayV2HTTPEvent, APIGate
         }
     }
 
+    private static final Map<String, String> SECURITY_HEADERS = Map.of(
+            "Content-Type",                "application/json",
+            "Strict-Transport-Security",   "max-age=63072000; includeSubDomains; preload",
+            "X-Content-Type-Options",      "nosniff",
+            "X-Frame-Options",             "DENY",
+            "Cache-Control",               "no-store",
+            "Referrer-Policy",             "strict-origin-when-cross-origin"
+    );
+
     public static APIGatewayV2HTTPResponse ok(String body) {
         return APIGatewayV2HTTPResponse.builder()
                 .withStatusCode(200)
-                .withHeaders(Map.of("Content-Type", "application/json"))
+                .withHeaders(SECURITY_HEADERS)
                 .withBody(body)
                 .build();
     }
@@ -48,7 +57,7 @@ public class ApiHandler implements RequestHandler<APIGatewayV2HTTPEvent, APIGate
     public static APIGatewayV2HTTPResponse err(int status, String message) {
         return APIGatewayV2HTTPResponse.builder()
                 .withStatusCode(status)
-                .withHeaders(Map.of("Content-Type", "application/json"))
+                .withHeaders(SECURITY_HEADERS)
                 .withBody("{\"message\":\"" + message + "\"}")
                 .build();
     }

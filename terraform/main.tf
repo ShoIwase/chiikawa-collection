@@ -93,6 +93,65 @@ resource "aws_s3_bucket_policy" "chiikawa_images" {
 }
 
 # ---------------------------------------------------------------------------
+# CloudFront Response Headers Policy (セキュリティヘッダー)
+# ---------------------------------------------------------------------------
+resource "aws_cloudfront_response_headers_policy" "chiikawa_security" {
+  name = "chiikawa-security-headers"
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 63072000 # 2年
+      include_subdomains         = true
+      preload                    = true
+      override                   = true
+    }
+    content_type_options {
+      override = true
+    }
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+    xss_protection {
+      mode_block = true
+      protection = true
+      override   = true
+    }
+    content_security_policy {
+      content_security_policy = join("; ", [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob:",
+        "connect-src 'self' https://cognito-idp.ap-northeast-1.amazonaws.com https://*.execute-api.ap-northeast-1.amazonaws.com",
+        "font-src 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+      ])
+      override = true
+    }
+  }
+
+  custom_headers_config {
+    items {
+      header   = "Permissions-Policy"
+      value    = "camera=(), microphone=(), geolocation=(), payment=()"
+      override = true
+    }
+    items {
+      header   = "Cache-Control"
+      value    = "no-store"
+      override = false # キャッシュポリシーを優先、HTMLのみ上書き
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
 # CloudFront OAC + Distribution
 # ---------------------------------------------------------------------------
 resource "aws_cloudfront_origin_access_control" "chiikawa" {
@@ -122,22 +181,24 @@ resource "aws_cloudfront_distribution" "chiikawa" {
   }
 
   default_cache_behavior {
-    target_origin_id       = "chiikawa-static"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    compress               = true
-    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+    target_origin_id            = "chiikawa-static"
+    viewer_protocol_policy      = "redirect-to-https"
+    allowed_methods             = ["GET", "HEAD", "OPTIONS"]
+    cached_methods              = ["GET", "HEAD"]
+    compress                    = true
+    cache_policy_id             = data.aws_cloudfront_cache_policy.caching_optimized.id
+    response_headers_policy_id  = aws_cloudfront_response_headers_policy.chiikawa_security.id
   }
 
   ordered_cache_behavior {
-    path_pattern           = "/images/*"
-    target_origin_id       = "chiikawa-images"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD"]
-    cached_methods         = ["GET", "HEAD"]
-    compress               = true
-    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+    path_pattern                = "/images/*"
+    target_origin_id            = "chiikawa-images"
+    viewer_protocol_policy      = "redirect-to-https"
+    allowed_methods             = ["GET", "HEAD"]
+    cached_methods              = ["GET", "HEAD"]
+    compress                    = true
+    cache_policy_id             = data.aws_cloudfront_cache_policy.caching_optimized.id
+    response_headers_policy_id  = aws_cloudfront_response_headers_policy.chiikawa_security.id
   }
 
   custom_error_response {
