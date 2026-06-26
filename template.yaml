@@ -5,7 +5,7 @@ Description: chiikawa-collection - Lambda functions and API Gateway
 Parameters:
   DomainName:
     Type: String
-    Description: ルートドメイン名 (例: bar504.net)
+    Description: "ルートドメイン名 (例: bar504.net)"
   MasterTableName:
     Type: String
     Default: ChiikawaMaster
