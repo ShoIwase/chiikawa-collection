@@ -34,34 +34,62 @@ class ScrapedItem:
 
 
 def fetch_items(target_url: str) -> list[ScrapedItem]:
-    """対象URLからダイカットキーホルダー商品を取得する。
+    """対象URLの全ページを巡回してダイカットキーホルダー商品を取得する。
 
     jp-api.com の HTML 構造:
       <a class="lightbox" href="/images/xxx_b.png" title="商品名">
         <img src="/images/xxx_b.png" alt="商品名" />
       </a>
     商品名は title 属性に格納されており、ページは Shift-JIS エンコード。
+    ページネーション: .next_back a[href*="PGE"] の形式。
     """
-    resp = requests.get(target_url, headers=_HEADERS, timeout=30)
+    items: list[ScrapedItem] = []
+    visited: set[str] = set()
+    pages = _collect_pages(target_url)
+
+    for page_url in pages:
+        if page_url in visited:
+            continue
+        visited.add(page_url)
+
+        resp = requests.get(page_url, headers=_HEADERS, timeout=30)
+        resp.raise_for_status()
+        resp.encoding = "shift_jis"
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        for a in soup.select("a.lightbox"):
+            item_name = a.get("title", "").strip()
+            if not item_name or KEYCHAIN_KEYWORD not in item_name:
+                continue
+            img_url = urllib.parse.urljoin(page_url, a.get("href", ""))
+            motif = _guess_motif(item_name)
+            items.append(ScrapedItem(item_name=item_name, image_url_original=img_url, motif=motif))
+
+        logger.info("Page %s: %d items (cumulative %d)", page_url, len(items), len(items))
+
+    logger.info("Scraped %d keychain items across %d pages", len(items), len(visited))
+    return items
+
+
+def _collect_pages(top_url: str) -> list[str]:
+    """トップページのページネーションリンクから全ページ URL を収集する。"""
+    resp = requests.get(top_url, headers=_HEADERS, timeout=30)
     resp.raise_for_status()
-    # Shift-JIS ページを正しくデコード
     resp.encoding = "shift_jis"
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    items: list[ScrapedItem] = []
-
-    # a.lightbox の title 属性が商品名、href が画像 URL
-    for a in soup.select("a.lightbox"):
-        item_name = a.get("title", "").strip()
-        if not item_name or KEYCHAIN_KEYWORD not in item_name:
+    pages = [top_url]
+    seen = {top_url}
+    for a in soup.select(".next_back a[href]"):
+        href = a.get("href", "")
+        if not href or "PGE" not in href:
             continue
+        full = urllib.parse.urljoin(top_url, href)
+        if full not in seen:
+            seen.add(full)
+            pages.append(full)
 
-        img_url = urllib.parse.urljoin(target_url, a.get("href", ""))
-        motif = _guess_motif(item_name)
-        items.append(ScrapedItem(item_name=item_name, image_url_original=img_url, motif=motif))
-
-    logger.info("Scraped %d keychain items", len(items))
-    return items
+    return pages
 
 
 def _guess_motif(name: str) -> str:
