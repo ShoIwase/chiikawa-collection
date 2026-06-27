@@ -166,6 +166,27 @@ resource "aws_cloudfront_response_headers_policy" "chiikawa_security" {
 }
 
 # ---------------------------------------------------------------------------
+# CloudFront Function: /path/ → /path/index.html リライト
+# ---------------------------------------------------------------------------
+resource "aws_cloudfront_function" "rewrite_index" {
+  name    = "chiikawa-rewrite-index"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = <<-EOT
+    async function handler(event) {
+      const request = event.request;
+      const uri = request.uri;
+      if (uri.endsWith('/')) {
+        request.uri += 'index.html';
+      } else if (!uri.includes('.')) {
+        request.uri += '/index.html';
+      }
+      return request;
+    }
+  EOT
+}
+
+# ---------------------------------------------------------------------------
 # CloudFront OAC + Distribution
 # ---------------------------------------------------------------------------
 resource "aws_cloudfront_origin_access_control" "chiikawa" {
@@ -202,6 +223,11 @@ resource "aws_cloudfront_distribution" "chiikawa" {
     compress                    = true
     cache_policy_id             = data.aws_cloudfront_cache_policy.caching_optimized.id
     response_headers_policy_id  = aws_cloudfront_response_headers_policy.chiikawa_security.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.rewrite_index.arn
+    }
   }
 
   ordered_cache_behavior {
