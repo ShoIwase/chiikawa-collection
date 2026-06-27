@@ -46,6 +46,7 @@ export default function FilterBar({
       <div className="flex gap-2 flex-wrap">
         <select
           value={areaType}
+          aria-label="エリア種別"
           onChange={(e) => {
             onAreaTypeChange(e.target.value);
             onAreaNameChange("");
@@ -60,6 +61,7 @@ export default function FilterBar({
 
         <select
           value={areaName}
+          aria-label="エリア名"
           onChange={(e) => onAreaNameChange(e.target.value)}
           disabled={!areaType}
           className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-300 disabled:opacity-40"
