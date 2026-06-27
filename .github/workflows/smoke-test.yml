@@ -1,0 +1,41 @@
+name: Smoke Test (Production)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 1'  # 毎週月曜 9:00 JST
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install chromium --with-deps
+
+      - name: Run smoke tests
+        working-directory: frontend
+        env:
+          CHIIKAWA_TEST_USERNAME: e2e-test
+          CHIIKAWA_TEST_PASSWORD: ${{ secrets.CHIIKAWA_TEST_PASSWORD }}
+        run: npx playwright test --config=playwright.prod.config.ts
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-report
+          path: frontend/playwright-report/
+          retention-days: 14

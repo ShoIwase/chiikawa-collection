@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "playwright test",
+    "test:prod": "playwright test --config=playwright.prod.config.ts"
   },
   "dependencies": {
     "aws-amplify": "^6.0.0",
@@ -14,6 +16,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -33,8 +33,9 @@ export default function VerifyModal({ item, onConfirm, onSkip }: Props) {
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">モチーフ</label>
+            <label htmlFor="motif" className="block text-xs font-medium text-gray-500 mb-1">モチーフ</label>
             <input
+              id="motif"
               type="text"
               value={motif}
               onChange={(e) => setMotif(e.target.value)}
@@ -43,8 +44,9 @@ export default function VerifyModal({ item, onConfirm, onSkip }: Props) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">エリア種別</label>
+            <label htmlFor="areaType" className="block text-xs font-medium text-gray-500 mb-1">エリア種別</label>
             <select
+              id="areaType"
               value={areaType}
               onChange={(e) => setAreaType(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-300"
@@ -56,8 +58,9 @@ export default function VerifyModal({ item, onConfirm, onSkip }: Props) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">エリア名</label>
+            <label htmlFor="areaName" className="block text-xs font-medium text-gray-500 mb-1">エリア名</label>
             <input
+              id="areaName"
               type="text"
               value={areaName}
               onChange={(e) => setAreaName(e.target.value)}

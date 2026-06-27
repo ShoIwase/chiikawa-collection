@@ -1,4 +1,4 @@
-import { fetchAuthSession } from "aws-amplify/auth";
+import { fetchAuthSession } from "@/lib/auth";
 import type { CollectionItem, MasterItem } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!;
