@@ -11,7 +11,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="ja">
-      <body className="bg-pink-50 min-h-screen text-gray-800">{children}</body>
+      <head>
+        <title>ちいかわコレクション</title>
+      </head>
+      <body className="bg-pink-50 min-h-screen text-gray-800">
+        <main>{children}</main>
+      </body>
     </html>
   );
 }
