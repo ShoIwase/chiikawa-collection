@@ -1,6 +1,20 @@
 # ---------------------------------------------------------------------------
 # Cognito: 既存ユーザープールに App Client を追加
 # ---------------------------------------------------------------------------
+
+resource "aws_cognito_user" "e2e_test" {
+  user_pool_id   = tolist(data.aws_cognito_user_pools.main.ids)[0]
+  username       = "e2e-test"
+  password       = var.chiikawa_test_password
+  message_action = "SUPPRESS"
+
+  attributes = {
+    email          = "e2e-test@bar504.net"
+    email_verified = "true"
+  }
+}
+
+
 resource "aws_cognito_user_pool_client" "chiikawa" {
   name         = "ChiikawaClient"
   user_pool_id = tolist(data.aws_cognito_user_pools.main.ids)[0]

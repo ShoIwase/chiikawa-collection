@@ -13,3 +13,9 @@ variable "chiikawa_family_id" {
   description = "UserCollection テーブルの共有ファミリーID"
   default     = "shoiwase"
 }
+
+variable "chiikawa_test_password" {
+  type        = string
+  sensitive   = true
+  description = "E2Eスモークテスト用 Cognito ユーザーのパスワード (GitHub Secrets: CHIIKAWA_TEST_PASSWORD)"
+}

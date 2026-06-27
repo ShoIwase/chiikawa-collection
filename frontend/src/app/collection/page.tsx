@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { signOut } from "aws-amplify/auth";
+import { signOut } from "@/lib/auth";
 import AuthGuard from "@/components/AuthGuard";
 import AlertBanner from "@/components/AlertBanner";
 import FilterBar from "@/components/FilterBar";

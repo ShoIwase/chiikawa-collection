@@ -9,3 +9,20 @@ __pycache__/
 .env
 .env.local
 .DS_Store
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+tfplan
+
+# Playwright
+playwright-report/
+test-results/
+
+# Next.js build artifacts
+tsconfig.tsbuildinfo
+next-env.d.ts
