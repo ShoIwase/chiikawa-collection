@@ -253,6 +253,8 @@ resource "aws_cloudfront_distribution" "chiikawa" {
     response_page_path = "/index.html"
   }
 
+  wait_for_deployment = false
+
   viewer_certificate {
     acm_certificate_arn      = data.aws_acm_certificate.cloudfront.arn
     ssl_support_method       = "sni-only"
