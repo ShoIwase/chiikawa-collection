@@ -36,8 +36,8 @@ jobs:
         run: terraform init
 
       - name: Terraform Plan
-        run: terraform plan -var="domain_name=${{ secrets.DOMAIN_NAME }}"
+        run: terraform plan -var="domain_name=${{ secrets.DOMAIN_NAME }}" -var="chiikawa_test_password=${{ secrets.CHIIKAWA_TEST_PASSWORD }}"
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
-        run: terraform apply -auto-approve -var="domain_name=${{ secrets.DOMAIN_NAME }}"
+        run: terraform apply -auto-approve -var="domain_name=${{ secrets.DOMAIN_NAME }}" -var="chiikawa_test_password=${{ secrets.CHIIKAWA_TEST_PASSWORD }}"
