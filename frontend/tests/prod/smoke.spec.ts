@@ -42,6 +42,18 @@ test("未認証で /collection/ にアクセスすると /login/ にリダイレ
   await expect(page).toHaveURL(/\/login\//, { timeout: 15_000 });
 });
 
+test("ログイン済みで /login/ に戻っても /collection/ にリダイレクト（二重ログイン不可）", async ({ page }) => {
+  await page.goto("/login/");
+  await page.getByLabel("ユーザー名").fill(USERNAME);
+  await page.getByLabel("パスワード").fill(PASSWORD);
+  await page.getByRole("button", { name: "ログイン" }).click();
+  await expect(page).toHaveURL(/\/collection\//, { timeout: 30_000 });
+
+  // ログイン済みのまま /login/ に直接アクセス
+  await page.goto("/login/");
+  await expect(page).toHaveURL(/\/collection\//, { timeout: 10_000 });
+});
+
 test("ログアウトで /login/ にリダイレクト", async ({ page }) => {
   await page.goto("/login/");
   await page.getByLabel("ユーザー名").fill(USERNAME);
