@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
 import { configureAmplify } from "@/lib/amplify-config";
 import "./globals.css";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    configureAmplify();
-  }, []);
+// useEffect より前に実行し、子コンポーネントの useEffect より確実に先に Amplify を初期化する
+configureAmplify();
 
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
       <head>
