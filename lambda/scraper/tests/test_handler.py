@@ -71,6 +71,7 @@ class TestHandlerImageUrl:
             "MASTER_TABLE":  MASTER_TABLE,
             "TARGET_URL":    TARGET_URL,
             "IMAGES_BUCKET": IMAGES_BUCKET,
+            "AWS_REGION":    "ap-northeast-1",
         }
         with patch.dict(os.environ, env):
             from handler import lambda_handler
