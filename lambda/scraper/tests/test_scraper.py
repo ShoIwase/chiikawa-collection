@@ -14,7 +14,7 @@ from scraper import (
     fetch_image_from_url,
     upload_image_to_s3,
     download_image_to_s3,
-    detect_characters,
+    analyze_image,
     _guess_motif,
 )
 
@@ -188,21 +188,21 @@ class TestImageFunctions:
 
 
 # ---------------------------------------------------------------------------
-# detect_characters
+# analyze_image
 # ---------------------------------------------------------------------------
 
-def _bedrock_response(characters: list[str]) -> dict:
-    """Bedrock converse のレスポンス形式をシミュレートする。"""
+def _bedrock_response(characters: list[str], region: str = "") -> dict:
+    """Bedrock converse のレスポンス形式（characters + region オブジェクト）をシミュレートする。"""
     return {
         "output": {
             "message": {
-                "content": [{"text": json.dumps(characters)}]
+                "content": [{"text": json.dumps({"characters": characters, "region": region})}]
             }
         }
     }
 
 
-class TestDetectCharacters:
+class TestAnalyzeImage:
 
     def test_detects_all_three_characters(self):
         mock_bedrock = MagicMock()
@@ -212,9 +212,9 @@ class TestDetectCharacters:
 
         with patch("scraper.boto3") as mock_boto3:
             mock_boto3.client.return_value = mock_bedrock
-            result = detect_characters(b"\xff\xd8\xff", "image/jpeg")
+            result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
 
-        assert result == ["ちいかわ", "ハチワレ", "うさぎ"]
+        assert result["characters"] == ["ちいかわ", "ハチワレ", "うさぎ"]
 
     def test_detects_single_character(self):
         mock_bedrock = MagicMock()
@@ -222,9 +222,33 @@ class TestDetectCharacters:
 
         with patch("scraper.boto3") as mock_boto3:
             mock_boto3.client.return_value = mock_bedrock
-            result = detect_characters(b"\xff\xd8\xff", "image/jpeg")
+            result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
 
-        assert result == ["ハチワレ"]
+        assert result["characters"] == ["ハチワレ"]
+
+    def test_extracts_region(self):
+        """画像から地域名を抽出する。"""
+        mock_bedrock = MagicMock()
+        mock_bedrock.converse.return_value = _bedrock_response(
+            ["ちいかわ", "ハチワレ", "うさぎ"], region="静岡"
+        )
+
+        with patch("scraper.boto3") as mock_boto3:
+            mock_boto3.client.return_value = mock_bedrock
+            result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
+
+        assert result["region"] == "静岡"
+
+    def test_strips_gentei_suffix_from_region(self):
+        """『静岡限定』のような表記から『限定』を除去する。"""
+        mock_bedrock = MagicMock()
+        mock_bedrock.converse.return_value = _bedrock_response(["ちいかわ"], region="静岡限定")
+
+        with patch("scraper.boto3") as mock_boto3:
+            mock_boto3.client.return_value = mock_bedrock
+            result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
+
+        assert result["region"] == "静岡"
 
     def test_filters_invalid_characters(self):
         """ちいかわ3キャラ以外の名前は除外される。"""
@@ -235,27 +259,28 @@ class TestDetectCharacters:
 
         with patch("scraper.boto3") as mock_boto3:
             mock_boto3.client.return_value = mock_bedrock
-            result = detect_characters(b"\xff\xd8\xff", "image/jpeg")
+            result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
 
-        assert result == ["ちいかわ"]
+        assert result["characters"] == ["ちいかわ"]
 
     def test_parses_markdown_code_fenced_response(self):
         """モデルが ```json ... ``` で包んで返しても正しくパースする。"""
         mock_bedrock = MagicMock()
         mock_bedrock.converse.return_value = {
             "output": {"message": {"content": [{
-                "text": '```json\n["ちいかわ", "ハチワレ"]\n```'
+                "text": '```json\n{"characters": ["ちいかわ", "ハチワレ"], "region": "京都"}\n```'
             }]}}
         }
 
         with patch("scraper.boto3") as mock_boto3:
             mock_boto3.client.return_value = mock_bedrock
-            result = detect_characters(b"\xff\xd8\xff", "image/jpeg")
+            result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
 
-        assert result == ["ちいかわ", "ハチワレ"]
+        assert result["characters"] == ["ちいかわ", "ハチワレ"]
+        assert result["region"] == "京都"
 
     def test_returns_empty_on_invalid_json(self):
-        """不正なレスポンスは空リストを返す。"""
+        """不正なレスポンスは空の結果を返す。"""
         mock_bedrock = MagicMock()
         mock_bedrock.converse.return_value = {
             "output": {"message": {"content": [{"text": "キャラクターは見つかりません"}]}}
@@ -263,9 +288,9 @@ class TestDetectCharacters:
 
         with patch("scraper.boto3") as mock_boto3:
             mock_boto3.client.return_value = mock_bedrock
-            result = detect_characters(b"\xff\xd8\xff", "image/jpeg")
+            result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
 
-        assert result == []
+        assert result == {"characters": [], "region": ""}
 
 
 # ---------------------------------------------------------------------------

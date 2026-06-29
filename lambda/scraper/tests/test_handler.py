@@ -42,12 +42,18 @@ def _make_table(dynamodb):
     )
 
 
-def _make_bedrock_client(characters: list[str]):
-    """指定キャラクターを返す Bedrock クライアントのモックを作成する。"""
-    mock_bedrock = MagicMock()
-    mock_bedrock.converse.return_value = {
-        "output": {"message": {"content": [{"text": json.dumps(characters)}]}}
+def _converse_payload(characters: list[str], region: str = "") -> dict:
+    return {
+        "output": {"message": {"content": [{
+            "text": json.dumps({"characters": characters, "region": region})
+        }]}}
     }
+
+
+def _make_bedrock_client(characters: list[str], region: str = ""):
+    """指定キャラクター・地域を返す Bedrock クライアントのモックを作成する。"""
+    mock_bedrock = MagicMock()
+    mock_bedrock.converse.return_value = _converse_payload(characters, region)
     return mock_bedrock
 
 
@@ -183,6 +189,74 @@ class TestHandlerCharacterSplitting:
         ).get("Item")
         assert item is not None
         assert item["Motif"] == "ちいかわ"
+
+
+_COLLISION_HTML_BYTES = """
+<html><body>
+<div class="item">
+  <a class="lightbox" href="/images/tphoto_111_0_b.png" title="みかん ダイカットキーホルダー">
+    <img src="/images/tphoto_111_0_b.png" alt="みかん ダイカットキーホルダー"/>
+  </a>
+</div>
+<div class="item">
+  <a class="lightbox" href="/images/tphoto_222_0_b.png" title="みかん ダイカットキーホルダー">
+    <img src="/images/tphoto_222_0_b.png" alt="みかん ダイカットキーホルダー"/>
+  </a>
+</div>
+</body></html>
+""".encode("shift_jis")
+
+
+class TestHandlerCollisionDisambiguation:
+
+    @mock_aws
+    @resp_mock.activate
+    def test_same_name_different_region_creates_distinct_entries(self):
+        """同名商品でも地域が違えば別エントリとして保存される（取りこぼし防止）。"""
+        dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
+        table = _make_table(dynamodb)
+
+        s3 = boto3.client("s3", region_name="ap-northeast-1")
+        s3.create_bucket(
+            Bucket=IMAGES_BUCKET,
+            CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
+        )
+
+        resp_mock.add(resp_mock.GET, TARGET_URL, body=_COLLISION_HTML_BYTES, status=200)
+        for pid in ("111", "222"):
+            resp_mock.add(
+                resp_mock.GET,
+                f"https://www.jp-api.com/images/tphoto_{pid}_0_b.png",
+                body=b"\xff\xd8\xff",
+                status=200,
+                headers={"Content-Type": "image/jpeg"},
+            )
+
+        # 1件目は静岡、2件目は和歌山を返す
+        mock_bedrock = MagicMock()
+        mock_bedrock.converse.side_effect = [
+            _converse_payload(["ちいかわ", "ハチワレ", "うさぎ"], region="静岡"),
+            _converse_payload(["ちいかわ", "ハチワレ", "うさぎ"], region="和歌山"),
+        ]
+
+        with patch.dict(os.environ, _env()):
+            with patch("scraper.boto3") as mock_scraper_boto3:
+                mock_scraper_boto3.client.return_value = mock_bedrock
+                from handler import lambda_handler
+                lambda_handler({}, MagicMock())
+
+        # 静岡・和歌山それぞれ3キャラ = 計6エントリが揃うこと
+        for region in ("静岡", "和歌山"):
+            for character in ("ちいかわ", "ハチワレ", "うさぎ"):
+                name = f"{region}　みかん ダイカットキーホルダー {character}"
+                item = table.get_item(
+                    Key={"Category": "KeyChain", "ItemName": name}
+                ).get("Item")
+                assert item is not None, f"エントリが存在しない: {name}"
+                assert item["AreaName"] == region
+
+        cnt = table.scan(Select="COUNT")["Count"]
+        assert cnt == 6, f"期待6件に対し {cnt} 件"
 
 
 class TestHandlerImageUrl:
