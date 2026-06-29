@@ -8,7 +8,8 @@ import AlertBanner from "@/components/AlertBanner";
 import FilterBar from "@/components/FilterBar";
 import CollectionGrid from "@/components/CollectionGrid";
 import ImageLightbox from "@/components/ImageLightbox";
-import { getCollectionItems, getPendingItems, updateItemStatus } from "@/lib/api";
+import TagEditor from "@/components/TagEditor";
+import { getCollectionItems, getPendingItems, updateItemStatus, updateItemTags } from "@/lib/api";
 import type { CollectionItem } from "@/lib/types";
 
 export default function CollectionPage() {
@@ -18,11 +19,11 @@ export default function CollectionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [areaType, setAreaType] = useState("");
-  const [areaName, setAreaName] = useState("");
   const [searchText, setSearchText] = useState("");
+  const [selectedTag, setSelectedTag] = useState("");
   const [showOwnedOnly, setShowOwnedOnly] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
+  const [editingItem, setEditingItem] = useState<CollectionItem | null>(null);
 
   useEffect(() => {
     Promise.all([getCollectionItems(), getPendingItems()])
@@ -42,29 +43,42 @@ export default function CollectionPage() {
     try {
       await updateItemStatus(item.ItemName, next);
     } catch {
-      // ロールバック
       setItems((prev) =>
         prev.map((i) => (i.ItemName === item.ItemName ? { ...i, Owned: item.Owned } : i))
       );
     }
   }, []);
 
+  const handleSaveTags = useCallback(async (tags: string[]) => {
+    if (!editingItem) return;
+    await updateItemTags(editingItem.ItemName, tags);
+    setItems((prev) =>
+      prev.map((i) => (i.ItemName === editingItem.ItemName ? { ...i, Tags: tags } : i))
+    );
+  }, [editingItem]);
+
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((i) => i.Tags?.forEach((t) => set.add(t)));
+    return [...set].sort();
+  }, [items]);
+
   const filtered = useMemo(() => {
     return items.filter((item) => {
-      if (areaType && item.AreaType !== areaType) return false;
-      if (areaName && item.AreaName !== areaName) return false;
+      if (selectedTag && !item.Tags?.includes(selectedTag)) return false;
       if (showOwnedOnly && item.Owned) return false;
       if (searchText) {
         const q = searchText.toLowerCase();
         return (
           item.ItemName.toLowerCase().includes(q) ||
           item.Motif.toLowerCase().includes(q) ||
-          item.AreaName.toLowerCase().includes(q)
+          item.AreaName.toLowerCase().includes(q) ||
+          item.Tags?.some((t) => t.toLowerCase().includes(q))
         );
       }
       return true;
     });
-  }, [items, areaType, areaName, searchText, showOwnedOnly]);
+  }, [items, selectedTag, searchText, showOwnedOnly]);
 
   const ownedCount = items.filter((i) => i.Owned).length;
 
@@ -90,13 +104,11 @@ export default function CollectionPage() {
 
         <FilterBar
           items={items}
-          areaType={areaType}
-          areaName={areaName}
           searchText={searchText}
+          selectedTag={selectedTag}
           showOwnedOnly={showOwnedOnly}
-          onAreaTypeChange={setAreaType}
-          onAreaNameChange={setAreaName}
           onSearchTextChange={setSearchText}
+          onTagChange={setSelectedTag}
           onShowOwnedOnlyChange={setShowOwnedOnly}
         />
 
@@ -111,14 +123,26 @@ export default function CollectionPage() {
             items={filtered}
             onToggle={handleToggle}
             onZoom={(src, alt) => setZoomedImage({ src, alt })}
+            onEditTags={setEditingItem}
+            onTagClick={setSelectedTag}
           />
         )}
       </div>
+
       {zoomedImage && (
         <ImageLightbox
           src={zoomedImage.src}
           alt={zoomedImage.alt}
           onClose={() => setZoomedImage(null)}
+        />
+      )}
+
+      {editingItem && (
+        <TagEditor
+          item={editingItem}
+          allTags={allTags}
+          onSave={handleSaveTags}
+          onClose={() => setEditingItem(null)}
         />
       )}
     </AuthGuard>

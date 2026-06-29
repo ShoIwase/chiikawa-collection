@@ -7,6 +7,7 @@ export type MasterItem = {
   ImageUrl: string;
   IsVerified: boolean;
   CreatedAt: string;
+  Tags?: string[];
 };
 
 export type CollectionItem = MasterItem & {

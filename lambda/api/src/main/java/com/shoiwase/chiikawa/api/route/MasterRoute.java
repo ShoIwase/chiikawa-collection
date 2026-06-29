@@ -106,4 +106,48 @@ public class MasterRoute {
 
         return ok("{\"success\":true}");
     }
+
+    @SuppressWarnings("unchecked")
+    public APIGatewayV2HTTPResponse updateTags(APIGatewayV2HTTPEvent event) throws Exception {
+        Map<String, String> params = event.getPathParameters();
+        if (params == null || params.get("itemName") == null) return err(400, "itemName is required");
+        String itemName = URLDecoder.decode(params.get("itemName"), StandardCharsets.UTF_8);
+
+        Map<String, Object> body = MAPPER.readValue(
+                event.getBody() != null ? event.getBody() : "{}",
+                new TypeReference<>() {});
+
+        List<String> tags = (List<String>) body.getOrDefault("tags", List.of());
+        // 空文字・重複を除去
+        List<String> cleaned = tags.stream()
+                .map(String::trim).filter(s -> !s.isEmpty())
+                .distinct().sorted().toList();
+
+        try {
+            if (cleaned.isEmpty()) {
+                client.updateItem(UpdateItemRequest.builder()
+                        .tableName(Db.MASTER_TABLE)
+                        .key(Map.of(
+                                "Category", AttributeValue.fromS("KeyChain"),
+                                "ItemName", AttributeValue.fromS(itemName)))
+                        .updateExpression("REMOVE Tags")
+                        .conditionExpression("attribute_exists(ItemName)")
+                        .build());
+            } else {
+                client.updateItem(UpdateItemRequest.builder()
+                        .tableName(Db.MASTER_TABLE)
+                        .key(Map.of(
+                                "Category", AttributeValue.fromS("KeyChain"),
+                                "ItemName", AttributeValue.fromS(itemName)))
+                        .updateExpression("SET Tags = :tags")
+                        .expressionAttributeValues(Map.of(":tags", AttributeValue.fromSs(cleaned)))
+                        .conditionExpression("attribute_exists(ItemName)")
+                        .build());
+            }
+        } catch (ConditionalCheckFailedException e) {
+            return err(404, "Item not found: " + itemName);
+        }
+
+        return ok("{\"success\":true}");
+    }
 }

@@ -117,6 +117,12 @@ Resources:
             ApiId: !Ref ChiikawaHttpApi
             Path: /items/{itemName}/verify
             Method: PUT
+        UpdateTags:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ChiikawaHttpApi
+            Path: /items/{itemName}/tags
+            Method: PUT
 
   # ---------------------------------------------------------------------------
   # Scraper Lambda: Python 3.12

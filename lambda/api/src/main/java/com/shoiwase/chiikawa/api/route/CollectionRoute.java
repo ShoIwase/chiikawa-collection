@@ -50,6 +50,7 @@ public class CollectionRoute {
             item.put("AreaName",   Db.str(m, "AreaName"));
             item.put("ImageUrl",   Db.str(m, "ImageUrl"));
             item.put("CreatedAt",  Db.str(m, "CreatedAt"));
+            item.put("Tags",       Db.tags(m));
             item.put("Owned",      col != null && Db.bool(col, "Status"));
             if (col != null) item.put("UpdatedAt", Db.str(col, "UpdatedAt"));
             return item;

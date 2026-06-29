@@ -2,37 +2,33 @@
 
 import { useMemo } from "react";
 import type { CollectionItem } from "@/lib/types";
-import { AREA_TYPES } from "@/lib/types";
 
 type Props = {
   items: CollectionItem[];
-  areaType: string;
-  areaName: string;
   searchText: string;
+  selectedTag: string;
   showOwnedOnly: boolean;
-  onAreaTypeChange: (v: string) => void;
-  onAreaNameChange: (v: string) => void;
   onSearchTextChange: (v: string) => void;
+  onTagChange: (v: string) => void;
   onShowOwnedOnlyChange: (v: boolean) => void;
 };
 
 export default function FilterBar({
   items,
-  areaType,
-  areaName,
   searchText,
+  selectedTag,
   showOwnedOnly,
-  onAreaTypeChange,
-  onAreaNameChange,
   onSearchTextChange,
+  onTagChange,
   onShowOwnedOnlyChange,
 }: Props) {
-  const areaNames = useMemo(() => {
-    const filtered = areaType
-      ? items.filter((i) => i.AreaType === areaType)
-      : items;
-    return [...new Set(filtered.map((i) => i.AreaName))].sort();
-  }, [items, areaType]);
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((i) => i.Tags?.forEach((t) => set.add(t)));
+    return [...set].sort();
+  }, [items]);
+
+  const hasFilter = searchText || selectedTag || showOwnedOnly;
 
   return (
     <div className="space-y-2">
@@ -43,32 +39,16 @@ export default function FilterBar({
         onChange={(e) => onSearchTextChange(e.target.value)}
         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
       />
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
         <select
-          value={areaType}
-          aria-label="エリア種別"
-          onChange={(e) => {
-            onAreaTypeChange(e.target.value);
-            onAreaNameChange("");
-          }}
+          value={selectedTag}
+          aria-label="タグで絞り込み"
+          onChange={(e) => onTagChange(e.target.value)}
           className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-300"
         >
-          <option value="">エリア種別</option>
-          {AREA_TYPES.map((t) => (
+          <option value="">タグ</option>
+          {allTags.map((t) => (
             <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
-
-        <select
-          value={areaName}
-          aria-label="エリア名"
-          onChange={(e) => onAreaNameChange(e.target.value)}
-          disabled={!areaType}
-          className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-300 disabled:opacity-40"
-        >
-          <option value="">エリア名</option>
-          {areaNames.map((n) => (
-            <option key={n} value={n}>{n}</option>
           ))}
         </select>
 
@@ -82,12 +62,11 @@ export default function FilterBar({
           未所持のみ
         </label>
 
-        {(areaType || areaName || searchText || showOwnedOnly) && (
+        {hasFilter && (
           <button
             onClick={() => {
-              onAreaTypeChange("");
-              onAreaNameChange("");
               onSearchTextChange("");
+              onTagChange("");
               onShowOwnedOnlyChange(false);
             }}
             className="text-xs text-gray-400 underline"
@@ -96,6 +75,17 @@ export default function FilterBar({
           </button>
         )}
       </div>
+
+      {/* 選択中タグのバッジ */}
+      {selectedTag && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">絞り込み中:</span>
+          <span className="inline-flex items-center gap-1 bg-pink-100 text-pink-700 text-xs font-medium px-2 py-0.5 rounded-full">
+            {selectedTag}
+            <button onClick={() => onTagChange("")} className="text-pink-400 hover:text-pink-600">×</button>
+          </span>
+        </div>
+      )}
     </div>
   );
 }

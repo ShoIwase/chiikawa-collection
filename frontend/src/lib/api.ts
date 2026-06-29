@@ -37,6 +37,16 @@ export async function updateItemStatus(itemName: string, owned: boolean): Promis
   if (!res.ok) throw new Error(`PUT /items/${itemName}/status failed: ${res.status}`);
 }
 
+export async function updateItemTags(itemName: string, tags: string[]): Promise<void> {
+  const encoded = encodeURIComponent(itemName);
+  const res = await fetch(`${API_URL}/items/${encoded}/tags`, {
+    method: "PUT",
+    headers: await authHeaders(),
+    body: JSON.stringify({ tags }),
+  });
+  if (!res.ok) throw new Error(`PUT /items/${itemName}/tags failed: ${res.status}`);
+}
+
 export async function verifyItem(
   itemName: string,
   patch: { areaType?: string; areaName?: string; motif?: string }

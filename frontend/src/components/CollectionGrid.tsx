@@ -7,9 +7,11 @@ type Props = {
   items: CollectionItem[];
   onToggle: (item: CollectionItem) => void;
   onZoom?: (imageUrl: string, alt: string) => void;
+  onEditTags?: (item: CollectionItem) => void;
+  onTagClick?: (tag: string) => void;
 };
 
-export default function CollectionGrid({ items, onToggle, onZoom }: Props) {
+export default function CollectionGrid({ items, onToggle, onZoom, onEditTags, onTagClick }: Props) {
   if (items.length === 0) {
     return (
       <div className="text-center py-16 text-gray-400">
@@ -22,7 +24,7 @@ export default function CollectionGrid({ items, onToggle, onZoom }: Props) {
   return (
     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
       {items.map((item) => (
-        <ItemCard key={item.ItemName} item={item} onToggle={onToggle} onZoom={onZoom} />
+        <ItemCard key={item.ItemName} item={item} onToggle={onToggle} onZoom={onZoom} onEditTags={onEditTags} onTagClick={onTagClick} />
       ))}
     </div>
   );
