@@ -11,7 +11,9 @@ IMAGES_BUCKET  = "chiikawa-images-123456789012"
 MASTER_TABLE   = "ChiikawaMaster"
 TARGET_URL     = "https://www.jp-api.com/contents/NOD62/"
 
-MINIMAL_HTML = """
+# scraper.py は resp.encoding = "shift_jis" で強制デコードするため、
+# モックレスポンスも Shift-JIS バイト列にする必要がある
+MINIMAL_HTML_BYTES = """
 <html><body>
 <div class="item">
   <a class="lightbox" href="/images/hokkaido_b.png" title="北海道 ダイカットキーホルダー">
@@ -21,7 +23,7 @@ MINIMAL_HTML = """
   <p class="character">ちいかわ</p>
 </div>
 </body></html>
-"""
+""".encode("shift_jis")
 
 
 def _make_table(dynamodb):
@@ -55,8 +57,8 @@ class TestHandlerImageUrl:
         )
 
         # スクレイプ対象HTML
-        resp_mock.add(resp_mock.GET, TARGET_URL, body=MINIMAL_HTML, status=200,
-                      headers={"Content-Type": "text/html; charset=utf-8"})
+        resp_mock.add(resp_mock.GET, TARGET_URL, body=MINIMAL_HTML_BYTES, status=200,
+                      headers={"Content-Type": "text/html; charset=shift_jis"})
 
         # 画像ダウンロードのモック
         resp_mock.add(
@@ -101,8 +103,8 @@ class TestHandlerImageUrl:
             CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
         )
 
-        resp_mock.add(resp_mock.GET, TARGET_URL, body=MINIMAL_HTML, status=200,
-                      headers={"Content-Type": "text/html; charset=utf-8"})
+        resp_mock.add(resp_mock.GET, TARGET_URL, body=MINIMAL_HTML_BYTES, status=200,
+                      headers={"Content-Type": "text/html; charset=shift_jis"})
         resp_mock.add(
             resp_mock.GET,
             "https://www.jp-api.com/images/hokkaido_b.png",
