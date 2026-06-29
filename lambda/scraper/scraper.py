@@ -1,4 +1,6 @@
+import base64
 import io
+import json
 import logging
 import os
 import re
@@ -10,6 +12,9 @@ import requests
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
+
+CHIIKAWA_CHARACTERS = ["ちいかわ", "ハチワレ", "うさぎ"]
+_BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
 
 def _get_images_bucket() -> str:
     return os.environ["IMAGES_BUCKET"]
@@ -106,27 +111,87 @@ def _guess_motif(name: str) -> str:
     return "ちいかわ"
 
 
-def download_image_to_s3(image_url: str, item_name: str) -> str:
-    """
-    元サイトの画像を S3 にダウンロードし、S3 パスを返す。
-    返り値は CloudFront 経由で /images/<key> としてアクセスされる。
-    """
-    safe_name = re.sub(r"[^\w\-]", "_", item_name)[:100]
-    ext = os.path.splitext(urllib.parse.urlparse(image_url).path)[1] or ".jpg"
-    s3_key = f"images/{safe_name}{ext}"
-
+def fetch_image_from_url(image_url: str) -> tuple[bytes, str]:
+    """元サイトから画像をダウンロードし (バイト列, Content-Type) を返す。"""
     resp = requests.get(image_url, headers=_HEADERS, timeout=30, stream=True)
     resp.raise_for_status()
-
     content_type = resp.headers.get("Content-Type", "image/jpeg")
-    data = io.BytesIO(resp.content)
+    return resp.content, content_type
+
+
+def upload_image_to_s3(image_data: bytes, item_name: str, content_type: str) -> str:
+    """画像バイト列を S3 にアップロードし、S3 キー (images/xxx.jpg) を返す。"""
+    safe_name = re.sub(r"[^\w\-]", "_", item_name)[:100]
+    # Content-Type から拡張子を推定
+    ct_ext = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+    }
+    ext = ct_ext.get(content_type.split(";")[0].strip(), ".jpg")
+    s3_key = f"images/{safe_name}{ext}"
 
     bucket = _get_images_bucket()
     _get_s3().upload_fileobj(
-        data,
+        io.BytesIO(image_data),
         bucket,
         s3_key,
         ExtraArgs={"ContentType": content_type},
     )
     logger.info("Uploaded image to s3://%s/%s", bucket, s3_key)
     return s3_key
+
+
+def download_image_to_s3(image_url: str, item_name: str) -> str:
+    """後方互換ラッパー。fetch + upload をまとめて実行する。"""
+    data, content_type = fetch_image_from_url(image_url)
+    return upload_image_to_s3(data, item_name, content_type)
+
+
+def detect_characters(image_data: bytes, content_type: str = "image/jpeg") -> list[str]:
+    """Bedrock Claude で画像を解析し、含まれるちいかわキャラクターのリストを返す。
+
+    検出対象: ちいかわ / ハチワレ / うさぎ
+    失敗時は空リストを返す（呼び出し元でフォールバックすること）。
+    """
+    bedrock = boto3.client("bedrock-runtime", region_name="ap-northeast-1")
+
+    prompt = (
+        "この画像はちいかわのダイカットキーホルダー商品です。"
+        "「ちいかわ」「ハチワレ」「うさぎ」のうち、画像に含まれているキャラクターを"
+        "JSON配列のみで返してください。例: [\"ちいかわ\", \"ハチワレ\"]"
+    )
+    payload = {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 60,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": content_type.split(";")[0].strip(),
+                        "data": base64.standard_b64encode(image_data).decode(),
+                    },
+                },
+                {"type": "text", "text": prompt},
+            ],
+        }],
+    }
+
+    response = bedrock.invoke_model(
+        modelId=_BEDROCK_MODEL_ID,
+        body=json.dumps(payload),
+    )
+    result = json.loads(response["body"].read())
+    text = result["content"][0]["text"].strip()
+
+    try:
+        detected = json.loads(text)
+        valid = set(CHIIKAWA_CHARACTERS)
+        return [c for c in detected if c in valid]
+    except (json.JSONDecodeError, TypeError, KeyError):
+        logger.warning("detect_characters: failed to parse response: %s", text)
+        return []

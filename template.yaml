@@ -154,6 +154,10 @@ Resources:
               Action:
                 - s3:PutObject
               Resource: !Sub "arn:aws:s3:::chiikawa-images-${AWS::AccountId}/*"
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
       Events:
         DailySchedule:
           Type: ScheduleV2
