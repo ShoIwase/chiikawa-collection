@@ -1,6 +1,7 @@
 package com.shoiwase.chiikawa.api;
 
 import com.amazonaws.services.lambda.runtime.Context;
+import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
 import com.shoiwase.chiikawa.api.route.CollectionRoute;
@@ -22,13 +23,14 @@ class ApiHandlerTest {
     @Mock CollectionRoute mockCollection;
     @Mock MasterRoute     mockMaster;
     @Mock Context         mockContext;
+    @Mock LambdaLogger    mockLogger;
 
     ApiHandler handler;
 
     @BeforeEach
     void setUp() {
         handler = new ApiHandler(mockCollection, mockMaster);
-        when(mockContext.getLogger()).thenReturn(msg -> {});
+        when(mockContext.getLogger()).thenReturn(mockLogger);
     }
 
     // -----------------------------------------------------------------------
