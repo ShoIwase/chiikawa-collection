@@ -1,8 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import type { MasterItem } from "@/lib/types";
 import { AREA_TYPES } from "@/lib/types";
+
+const CLOUDFRONT_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL ?? "";
 
 type Props = {
   item: MasterItem;
@@ -28,11 +31,18 @@ export default function VerifyModal({ item, onConfirm, onSkip, onBulkApprove, re
     }
   }
 
+  const imageUrl = item.ImageUrl ? `${CLOUDFRONT_URL}${item.ImageUrl}` : "/no-image.png";
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 px-4">
       <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
         <h2 className="font-bold text-lg mb-1 text-gray-800">アイテムを確認</h2>
-        <p className="text-sm text-gray-500 mb-4 break-all">{item.ItemName}</p>
+        <p className="text-sm text-gray-500 mb-3 break-all">{item.ItemName}</p>
+
+        {/* 画像プレビュー */}
+        <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-gray-100 mb-4">
+          <Image src={imageUrl} alt={item.ItemName} fill className="object-contain" unoptimized />
+        </div>
 
         <div className="space-y-3">
           <div>
@@ -72,19 +82,19 @@ export default function VerifyModal({ item, onConfirm, onSkip, onBulkApprove, re
           </div>
         </div>
 
-        <div className="flex gap-3 mt-6">
-          <button
-            onClick={onSkip}
-            className="flex-1 border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 transition-colors"
-          >
-            スキップ
-          </button>
+        <div className="mt-6 space-y-2">
           <button
             onClick={handleConfirm}
             disabled={loading || !areaType || !areaName}
-            className="flex-1 bg-pink-400 hover:bg-pink-500 disabled:opacity-50 text-white font-semibold rounded-lg py-2 text-sm transition-colors"
+            className="w-full bg-pink-400 hover:bg-pink-500 disabled:opacity-50 text-white font-semibold rounded-xl py-3 text-base transition-colors"
           >
             {loading ? "確定中..." : "確定"}
+          </button>
+          <button
+            onClick={onSkip}
+            className="w-full text-gray-400 text-sm py-2 hover:text-gray-600 transition-colors"
+          >
+            スキップ
           </button>
         </div>
 
