@@ -140,6 +140,14 @@ class RoutesIntegrationTest {
 
     @Test
     @Order(6)
+    void verifyItem_itemNotFound_returns404() throws Exception {
+        // テーブルにアイテムが存在しない状態で verify を呼ぶ
+        var resp = masterRoute.verifyItem(eventWithPath("存在しないアイテム", "{}"));
+        assertEquals(404, resp.getStatusCode());
+    }
+
+    @Test
+    @Order(7)
     void verifyItem_setsIsVerifiedAndUpdatesArea() throws Exception {
         putMasterItem("箱根 ダイカットキーホルダー", "ちいかわ", "市町村", "箱根", false);
 
