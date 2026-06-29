@@ -22,6 +22,7 @@ export default function VerifyPage() {
   }, []);
 
   const current = items[currentIndex];
+  const [bulkProgress, setBulkProgress] = useState<number | null>(null);
 
   async function handleConfirm(
     itemName: string,
@@ -37,6 +38,24 @@ export default function VerifyPage() {
     } else {
       setCurrentIndex((i) => i + 1);
     }
+  }
+
+  async function handleBulkApprove() {
+    setBulkProgress(0);
+    const CHUNK = 5;
+    for (let i = 0; i < items.length; i += CHUNK) {
+      await Promise.all(
+        items.slice(i, i + CHUNK).map((item) =>
+          verifyItem(item.ItemName, {
+            areaType: item.AreaType,
+            areaName: item.AreaName,
+            motif: item.Motif,
+          }).catch(() => {})
+        )
+      );
+      setBulkProgress(Math.min(i + CHUNK, items.length));
+    }
+    router.replace("/collection/");
   }
 
   return (
@@ -65,8 +84,30 @@ export default function VerifyPage() {
         )}
 
         {!loading && items.length > 0 && (
-          <div className="text-center mb-4 text-sm text-gray-500">
-            {currentIndex + 1} / {items.length} 件
+          <div className="space-y-3 mb-4">
+            <div className="text-center text-sm text-gray-500">
+              {currentIndex + 1} / {items.length} 件
+            </div>
+            {bulkProgress === null ? (
+              <button
+                onClick={handleBulkApprove}
+                className="w-full border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 transition-colors"
+              >
+                すべてそのまま確定（{items.length} 件）
+              </button>
+            ) : (
+              <div className="space-y-1">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-pink-400 h-2 rounded-full transition-all"
+                    style={{ width: `${(bulkProgress / items.length) * 100}%` }}
+                  />
+                </div>
+                <p className="text-center text-xs text-gray-500">
+                  {bulkProgress} / {items.length} 件処理中...
+                </p>
+              </div>
+            )}
           </div>
         )}
 
