@@ -56,6 +56,17 @@ test.describe("アクセシビリティ", () => {
 // レスポンシブデザイン
 // ---------------------------------------------------------------------------
 test.describe("レスポンシブ", () => {
+  test("タブレット(768px): コレクションが表示される", async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await mockAuth(page);
+    await mockApi(page, { items: MOCK_ITEMS });
+    await page.goto("/collection/");
+
+    await expect(page.getByText("ちいかわコレクション")).toBeVisible();
+    await expect(page.getByPlaceholder("アイテム名・モチーフで検索...")).toBeVisible();
+    const grid = page.locator(".grid");
+    await expect(grid).toBeVisible();
+  });
   test("モバイル: ログインフォームが収まる", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await mockUnauthenticated(page);
