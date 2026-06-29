@@ -149,18 +149,30 @@ def download_image_to_s3(image_url: str, item_name: str) -> str:
     return upload_image_to_s3(data, item_name, content_type)
 
 
-def detect_characters(image_data: bytes, content_type: str = "image/jpeg") -> list[str]:
-    """Bedrock Claude (Converse API) で画像を解析し、含まれるちいかわキャラクターのリストを返す。
+def _clean_region(region: str) -> str:
+    """画像から抽出した地域ラベルを正規化する（『静岡限定』→『静岡』）。"""
+    region = str(region).strip()
+    region = re.sub(r"(店舗限定|限定)$", "", region).strip()
+    return region
 
-    検出対象: ちいかわ / ハチワレ / うさぎ
-    失敗時は空リストを返す（呼び出し元でフォールバックすること）。
+
+def analyze_image(image_data: bytes, content_type: str = "image/jpeg") -> dict:
+    """Bedrock Claude (Converse API) で画像を解析し、キャラクターと地域名を返す。
+
+    戻り値: {"characters": [...], "region": "静岡"}
+      - characters: ちいかわ / ハチワレ / うさぎ のうち画像に含まれるもの
+      - region: 画像内の『○○限定』等の地域名（『限定』除去済み。無ければ ""）
+    失敗時は {"characters": [], "region": ""} を返す（呼び出し元でフォールバックすること）。
     """
     bedrock = boto3.client("bedrock-runtime", region_name="ap-northeast-1")
 
     prompt = (
-        "この画像はちいかわのダイカットキーホルダー商品です。"
-        "「ちいかわ」「ハチワレ」「うさぎ」のうち、画像に含まれているキャラクターを"
-        "JSON配列のみで返してください。例: [\"ちいかわ\", \"ハチワレ\"]"
+        "この画像はちいかわのご当地ダイカットキーホルダー商品です。"
+        "次の2点をJSONオブジェクトのみで返してください。\n"
+        "1. characters: 「ちいかわ」「ハチワレ」「うさぎ」のうち画像に含まれるもの（配列）\n"
+        "2. region: 画像内に書かれた『○○限定』等の地域名。地名部分のみ（例: 静岡, 香港, 奈良, 鎌倉）。"
+        "地域表記が無ければ空文字。\n"
+        '例: {"characters": ["ちいかわ", "ハチワレ", "うさぎ"], "region": "静岡"}'
     )
     response = bedrock.converse(
         modelId=_BEDROCK_MODEL_ID,
@@ -178,20 +190,22 @@ def detect_characters(image_data: bytes, content_type: str = "image/jpeg") -> li
                 {"text": prompt},
             ],
         }],
-        inferenceConfig={"maxTokens": 60},
+        inferenceConfig={"maxTokens": 150},
     )
     text = response["output"]["message"]["content"][0]["text"].strip()
 
     # モデルは ```json ... ``` のコードフェンスで包むことがあるため、
-    # 最初の JSON 配列 [...] のみを抽出してからパースする。
-    match = re.search(r"\[.*?\]", text, re.DOTALL)
+    # 最初の JSON オブジェクト {...} のみを抽出してからパースする。
+    match = re.search(r"\{.*\}", text, re.DOTALL)
     if match:
         text = match.group(0)
 
     try:
-        detected = json.loads(text)
+        data = json.loads(text)
         valid = set(CHIIKAWA_CHARACTERS)
-        return [c for c in detected if c in valid]
-    except (json.JSONDecodeError, TypeError, KeyError):
-        logger.warning("detect_characters: failed to parse response: %s", text)
-        return []
+        characters = [c for c in data.get("characters", []) if c in valid]
+        region = _clean_region(data.get("region", ""))
+        return {"characters": characters, "region": region}
+    except (json.JSONDecodeError, TypeError, KeyError, AttributeError):
+        logger.warning("analyze_image: failed to parse response: %s", text)
+        return {"characters": [], "region": ""}
