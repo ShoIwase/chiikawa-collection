@@ -7,11 +7,13 @@ type Props = {
   item: CollectionItem;
   onToggle: (item: CollectionItem) => void;
   onZoom?: (imageUrl: string, alt: string) => void;
+  onEditTags?: (item: CollectionItem) => void;
+  onTagClick?: (tag: string) => void;
 };
 
 const CLOUDFRONT_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL ?? "";
 
-export default function ItemCard({ item, onToggle, onZoom }: Props) {
+export default function ItemCard({ item, onToggle, onZoom, onEditTags, onTagClick }: Props) {
   const imageUrl = item.ImageUrl ? `${CLOUDFRONT_URL}${item.ImageUrl}` : "/no-image.png";
 
   return (
@@ -52,8 +54,36 @@ export default function ItemCard({ item, onToggle, onZoom }: Props) {
         <p className="text-xs font-medium text-gray-700 line-clamp-2 leading-tight">
           {item.ItemName}
         </p>
-        <p className="text-xs text-gray-400 mt-0.5">{item.AreaName}</p>
+        {item.Tags && item.Tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {item.Tags.slice(0, 2).map((tag) => (
+              <button
+                key={tag}
+                onClick={(e) => { e.stopPropagation(); onTagClick?.(tag); }}
+                className="text-[10px] bg-pink-50 text-pink-600 rounded px-1.5 py-0.5 leading-none"
+              >
+                {tag}
+              </button>
+            ))}
+            {item.Tags.length > 2 && (
+              <span className="text-[10px] text-gray-400">+{item.Tags.length - 2}</span>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 mt-0.5">{item.AreaName}</p>
+        )}
       </button>
+
+      {/* タグ編集ボタン */}
+      {onEditTags && (
+        <button
+          onClick={() => onEditTags(item)}
+          aria-label={`${item.ItemName} のタグを編集`}
+          className="absolute bottom-[3.5rem] right-1 bg-white/80 text-gray-500 text-xs rounded-full w-6 h-6 flex items-center justify-center shadow-sm hover:bg-white"
+        >
+          ✏️
+        </button>
+      )}
     </div>
   );
 }

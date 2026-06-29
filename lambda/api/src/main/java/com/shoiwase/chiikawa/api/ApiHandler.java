@@ -43,6 +43,8 @@ public class ApiHandler implements RequestHandler<APIGatewayV2HTTPEvent, APIGate
                 return collection.updateStatus(event);
             if ("PUT".equals(method) && path.matches("/items/[^/]+/verify"))
                 return master.verifyItem(event);
+            if ("PUT".equals(method) && path.matches("/items/[^/]+/tags"))
+                return master.updateTags(event);
 
             return err(404, "Not Found");
         } catch (Exception e) {

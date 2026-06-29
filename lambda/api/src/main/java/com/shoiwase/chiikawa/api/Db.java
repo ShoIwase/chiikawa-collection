@@ -4,6 +4,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
+import java.util.List;
 import java.util.Map;
 
 public final class Db {
@@ -32,5 +33,12 @@ public final class Db {
     public static boolean bool(Map<String, AttributeValue> item, String key) {
         AttributeValue v = item.get(key);
         return v != null && Boolean.TRUE.equals(v.bool());
+    }
+
+    /** DynamoDB String Set (SS) を List<String> に変換。Tags フィールド用。 */
+    public static List<String> tags(Map<String, AttributeValue> item) {
+        AttributeValue v = item.get("Tags");
+        if (v == null || !v.hasSs()) return List.of();
+        return v.ss().stream().sorted().toList();
     }
 }
