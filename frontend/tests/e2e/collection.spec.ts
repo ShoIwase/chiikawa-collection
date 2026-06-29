@@ -104,6 +104,21 @@ test.describe("コレクションページ", () => {
     await expect(page.getByText(/未確認の新着アイテム/)).not.toBeVisible();
   });
 
+  test("アイテム画像が src 属性を持つ", async ({ page }) => {
+    await mockAuth(page);
+    await mockApi(page, { items: MOCK_ITEMS });
+    await page.goto("/collection/");
+    await expect(page.getByText(MOCK_ITEMS[0].ItemName)).toBeVisible();
+
+    const imgs = await page.locator("img").all();
+    expect(imgs.length).toBeGreaterThan(0);
+    for (const img of imgs) {
+      const src = await img.getAttribute("src");
+      expect(src).toBeTruthy();
+      expect(src).not.toContain("/images/images/");
+    }
+  });
+
   test("ログアウトで /login/ にリダイレクト", async ({ page }) => {
     await mockAuth(page);
     await mockApi(page, { items: MOCK_ITEMS });

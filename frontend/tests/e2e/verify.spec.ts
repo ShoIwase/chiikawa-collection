@@ -50,7 +50,7 @@ test.describe("確認ページ", () => {
     });
     await page.goto("/verify/");
 
-    await page.getByRole("button", { name: "確定" }).click();
+    await page.getByRole("button", { name: "確定", exact: true }).click();
     await expect(page).toHaveURL(/\/collection\//);
     expect(verifyCalled).toBe(true);
   });
@@ -75,7 +75,7 @@ test.describe("確認ページ", () => {
     await page.goto("/verify/");
 
     await page.getByLabel("エリア名").clear();
-    await expect(page.getByRole("button", { name: "確定" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "確定", exact: true })).toBeDisabled();
   });
 
   test("未確認アイテムが0件の場合は空状態メッセージが表示される", async ({ page }) => {
@@ -84,6 +84,50 @@ test.describe("確認ページ", () => {
     await page.goto("/verify/");
 
     await expect(page.getByText("未確認のアイテムはありません")).toBeVisible();
+  });
+
+  // -----------------------------------------------------------------------
+  // 一括確定
+  // -----------------------------------------------------------------------
+
+  test("一括確定ボタンがモーダル内に表示される", async ({ page }) => {
+    await mockAuth(page);
+    await mockApi(page, { items: MOCK_ITEMS, pending: MOCK_PENDING });
+    await page.goto("/verify/");
+
+    const btn = page.getByRole("button", { name: /すべてそのまま確定/ });
+    await expect(btn).toBeVisible();
+  });
+
+  test("一括確定でverifyが全件呼ばれ /collection/ にリダイレクト", async ({ page }) => {
+    const verified: string[] = [];
+    await mockAuth(page);
+    await mockApi(page, { items: MOCK_ITEMS, pending: MOCK_PENDING });
+    await page.route("https://api.chiikawa.test/items/*/verify", (route) => {
+      const url = new URL(route.request().url());
+      verified.push(decodeURIComponent(url.pathname.split("/")[2]));
+      route.fulfill({ status: 200, json: {} });
+    });
+    await page.goto("/verify/");
+
+    await page.getByRole("button", { name: /すべてそのまま確定/ }).click();
+    await expect(page).toHaveURL(/\/collection\//, { timeout: 15_000 });
+    expect(verified.length).toBe(MOCK_PENDING.length);
+  });
+
+  test("一括確定中は進捗バーが表示される", async ({ page }) => {
+    await mockAuth(page);
+    await mockApi(page, { items: MOCK_ITEMS, pending: MOCK_PENDING });
+    await page.route("https://api.chiikawa.test/items/*/verify", async (route) => {
+      await new Promise<void>((r) => setTimeout(r, 300));
+      route.fulfill({ status: 200, json: {} });
+    });
+    await page.goto("/verify/");
+
+    await page.getByRole("button", { name: /すべてそのまま確定/ }).click();
+    // 処理中テキストとグレーコンテナで進捗バー表示を確認
+    await expect(page.getByText(/件処理中/)).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator(".bg-gray-200.rounded-full")).toBeVisible();
   });
 
   test("複数アイテムがある場合にスキップで次のアイテムへ進む", async ({ page }) => {
