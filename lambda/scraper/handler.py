@@ -11,25 +11,26 @@ from scraper import fetch_items, download_image_to_s3
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-MASTER_TABLE: str = os.environ["MASTER_TABLE"]
-TARGET_URL: str = os.environ["TARGET_URL"]
-
-_dynamodb = boto3.resource("dynamodb")
-_table = _dynamodb.Table(MASTER_TABLE)
-
 CLOUDFRONT_IMAGES_PREFIX = "/"
 
 
 def lambda_handler(event: dict, context: object) -> dict:
-    logger.info("Starting scrape: %s", TARGET_URL)
+    # モジュールレベルでの boto3 初期化を避け、テスト時に moto が確実に有効な状態で初期化する
+    master_table = os.environ["MASTER_TABLE"]
+    target_url = os.environ["TARGET_URL"]
+    region = os.environ.get("AWS_REGION", "ap-northeast-1")
 
-    items = fetch_items(TARGET_URL)
+    dynamodb = boto3.resource("dynamodb", region_name=region)
+    table = dynamodb.Table(master_table)
+
+    logger.info("Starting scrape: %s", target_url)
+
+    items = fetch_items(target_url)
     if not items:
-        logger.warning("No keychain items found at %s", TARGET_URL)
+        logger.warning("No keychain items found at %s", target_url)
         return {"statusCode": 200, "body": "No items found"}
 
-    # 既存アイテム名を取得（重複チェック用）
-    existing = _get_existing_item_names()
+    existing = _get_existing_item_names(table)
 
     added = 0
     skipped = 0
@@ -40,7 +41,6 @@ def lambda_handler(event: dict, context: object) -> dict:
             skipped += 1
             continue
 
-        # 画像を S3 にダウンロード
         image_s3_key = ""
         if item.image_url_original:
             try:
@@ -50,13 +50,11 @@ def lambda_handler(event: dict, context: object) -> dict:
             except Exception as e:
                 logger.warning("Image download failed for %s: %s", item.item_name, e)
 
-        # エリア予測
         area_type, area_name = predict_area(item.item_name)
 
-        # CloudFront 経由の画像 URL (フロントエンドは /images/<key> でアクセス)
         image_url = f"{CLOUDFRONT_IMAGES_PREFIX}{image_s3_key}" if image_s3_key else ""
 
-        _table.put_item(
+        table.put_item(
             Item={
                 "Category": "KeyChain",
                 "ItemName": item.item_name,
@@ -76,14 +74,14 @@ def lambda_handler(event: dict, context: object) -> dict:
     return {"statusCode": 200, "body": str(result)}
 
 
-def _get_existing_item_names() -> set[str]:
+def _get_existing_item_names(table) -> set[str]:
     names: set[str] = set()
     kwargs: dict = {
         "KeyConditionExpression": Key("Category").eq("KeyChain"),
         "ProjectionExpression": "ItemName",
     }
     while True:
-        resp = _table.query(**kwargs)
+        resp = table.query(**kwargs)
         for item in resp.get("Items", []):
             names.add(item["ItemName"])
         last_key = resp.get("LastEvaluatedKey")
