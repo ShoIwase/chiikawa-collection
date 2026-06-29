@@ -64,4 +64,11 @@ test.describe("ログインページ", () => {
     await page.goto("/");
     await expect(page).toHaveURL(/\/login\//);
   });
+
+  test("認証済みで /login/ に直接アクセスすると /collection/ にリダイレクト", async ({ page }) => {
+    await mockAuth(page);
+    await mockApi(page);
+    await page.goto("/login/");
+    await expect(page).toHaveURL(/\/collection\//, { timeout: 10_000 });
+  });
 });
