@@ -8,9 +8,12 @@ type Props = {
   item: MasterItem;
   onConfirm: (itemName: string, patch: { areaType: string; areaName: string; motif: string }) => Promise<void>;
   onSkip: () => void;
+  onBulkApprove?: () => void;
+  remainingCount?: number;
+  bulkProgress?: number | null;
 };
 
-export default function VerifyModal({ item, onConfirm, onSkip }: Props) {
+export default function VerifyModal({ item, onConfirm, onSkip, onBulkApprove, remainingCount, bulkProgress }: Props) {
   const [areaType, setAreaType] = useState(item.AreaType);
   const [areaName, setAreaName] = useState(item.AreaName);
   const [motif, setMotif] = useState(item.Motif);
@@ -84,6 +87,31 @@ export default function VerifyModal({ item, onConfirm, onSkip }: Props) {
             {loading ? "確定中..." : "確定"}
           </button>
         </div>
+
+        {onBulkApprove && remainingCount != null && (
+          <div className="mt-3">
+            {bulkProgress == null ? (
+              <button
+                onClick={onBulkApprove}
+                className="w-full border border-gray-200 text-gray-400 rounded-lg py-2 text-xs hover:bg-gray-50 transition-colors"
+              >
+                すべてそのまま確定（残り {remainingCount} 件）
+              </button>
+            ) : (
+              <div className="space-y-1">
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                  <div
+                    className="bg-pink-400 h-1.5 rounded-full transition-all"
+                    style={{ width: `${(bulkProgress / remainingCount) * 100}%` }}
+                  />
+                </div>
+                <p className="text-center text-xs text-gray-400">
+                  {bulkProgress} / {remainingCount} 件処理中...
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

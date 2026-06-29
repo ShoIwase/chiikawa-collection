@@ -84,30 +84,8 @@ export default function VerifyPage() {
         )}
 
         {!loading && items.length > 0 && (
-          <div className="space-y-3 mb-4">
-            <div className="text-center text-sm text-gray-500">
-              {currentIndex + 1} / {items.length} 件
-            </div>
-            {bulkProgress === null ? (
-              <button
-                onClick={handleBulkApprove}
-                className="w-full border border-gray-300 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-50 transition-colors"
-              >
-                すべてそのまま確定（{items.length} 件）
-              </button>
-            ) : (
-              <div className="space-y-1">
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-pink-400 h-2 rounded-full transition-all"
-                    style={{ width: `${(bulkProgress / items.length) * 100}%` }}
-                  />
-                </div>
-                <p className="text-center text-xs text-gray-500">
-                  {bulkProgress} / {items.length} 件処理中...
-                </p>
-              </div>
-            )}
+          <div className="text-center text-sm text-gray-500 mb-4">
+            {currentIndex + 1} / {items.length} 件
           </div>
         )}
 
@@ -116,6 +94,9 @@ export default function VerifyPage() {
             item={current}
             onConfirm={handleConfirm}
             onSkip={advance}
+            onBulkApprove={handleBulkApprove}
+            remainingCount={items.length - currentIndex}
+            bulkProgress={bulkProgress}
           />
         )}
       </div>
