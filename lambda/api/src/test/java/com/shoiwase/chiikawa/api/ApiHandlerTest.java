@@ -30,7 +30,6 @@ class ApiHandlerTest {
     @BeforeEach
     void setUp() {
         handler = new ApiHandler(mockCollection, mockMaster);
-        when(mockContext.getLogger()).thenReturn(mockLogger);
     }
 
     // -----------------------------------------------------------------------
@@ -94,6 +93,7 @@ class ApiHandlerTest {
     @Test
     void exceptionInRoute_returns500() throws Exception {
         when(mockCollection.getItems()).thenThrow(new RuntimeException("DynamoDB error"));
+        when(mockContext.getLogger()).thenReturn(mockLogger);
 
         var resp = handler.handleRequest(event("GET", "/items", null, null), mockContext);
 
