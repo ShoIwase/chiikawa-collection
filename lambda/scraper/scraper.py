@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 logger = logging.getLogger(__name__)
 
 CHIIKAWA_CHARACTERS = ["ちいかわ", "ハチワレ", "うさぎ"]
-_BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+_BEDROCK_MODEL_ID = "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 def _get_images_bucket() -> str:
     return os.environ["IMAGES_BUCKET"]
@@ -150,7 +150,7 @@ def download_image_to_s3(image_url: str, item_name: str) -> str:
 
 
 def detect_characters(image_data: bytes, content_type: str = "image/jpeg") -> list[str]:
-    """Bedrock Claude で画像を解析し、含まれるちいかわキャラクターのリストを返す。
+    """Bedrock Claude (Converse API) で画像を解析し、含まれるちいかわキャラクターのリストを返す。
 
     検出対象: ちいかわ / ハチワレ / うさぎ
     失敗時は空リストを返す（呼び出し元でフォールバックすること）。
@@ -162,31 +162,25 @@ def detect_characters(image_data: bytes, content_type: str = "image/jpeg") -> li
         "「ちいかわ」「ハチワレ」「うさぎ」のうち、画像に含まれているキャラクターを"
         "JSON配列のみで返してください。例: [\"ちいかわ\", \"ハチワレ\"]"
     )
-    payload = {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 60,
-        "messages": [{
+    response = bedrock.converse(
+        modelId=_BEDROCK_MODEL_ID,
+        messages=[{
             "role": "user",
             "content": [
                 {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": content_type.split(";")[0].strip(),
-                        "data": base64.standard_b64encode(image_data).decode(),
+                    "image": {
+                        "format": content_type.split(";")[0].strip().split("/")[-1],
+                        "source": {
+                            "bytes": image_data,
+                        },
                     },
                 },
-                {"type": "text", "text": prompt},
+                {"text": prompt},
             ],
         }],
-    }
-
-    response = bedrock.invoke_model(
-        modelId=_BEDROCK_MODEL_ID,
-        body=json.dumps(payload),
+        inferenceConfig={"maxTokens": 60},
     )
-    result = json.loads(response["body"].read())
-    text = result["content"][0]["text"].strip()
+    text = response["output"]["message"]["content"][0]["text"].strip()
 
     try:
         detected = json.loads(text)
