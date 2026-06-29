@@ -9,7 +9,14 @@ import boto3
 from unittest.mock import patch, MagicMock
 from moto import mock_aws
 
-from scraper import fetch_items, download_image_to_s3, _guess_motif
+from scraper import (
+    fetch_items,
+    fetch_image_from_url,
+    upload_image_to_s3,
+    download_image_to_s3,
+    detect_characters,
+    _guess_motif,
+)
 
 IMAGES_BUCKET = "chiikawa-images-123456789012"
 TARGET_URL    = "https://www.jp-api.com/contents/NOD62/"
@@ -91,26 +98,54 @@ class TestFetchItems:
 
 
 # ---------------------------------------------------------------------------
-# download_image_to_s3
+# fetch_image_from_url / upload_image_to_s3 / download_image_to_s3
 # ---------------------------------------------------------------------------
 
-class TestDownloadImageToS3:
+class TestImageFunctions:
+
+    @resp_mock.activate
+    def test_fetch_image_from_url_returns_bytes_and_content_type(self):
+        resp_mock.add(
+            resp_mock.GET,
+            "https://example.com/images/hokkaido.jpg",
+            body=b"\xff\xd8\xff",
+            status=200,
+            headers={"Content-Type": "image/jpeg"},
+        )
+
+        data, ct = fetch_image_from_url("https://example.com/images/hokkaido.jpg")
+        assert data == b"\xff\xd8\xff"
+        assert ct == "image/jpeg"
 
     @mock_aws
-    @resp_mock.activate
-    def test_uploads_image_to_s3(self):
-        # S3バケットを作成
+    def test_upload_image_to_s3_stores_object(self):
         s3 = boto3.client("s3", region_name="ap-northeast-1")
         s3.create_bucket(
             Bucket=IMAGES_BUCKET,
             CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
         )
 
-        # 画像URLのモック
+        with patch.dict(os.environ, {"IMAGES_BUCKET": IMAGES_BUCKET}):
+            key = upload_image_to_s3(b"\xff\xd8\xff", "北海道 ダイカットキーホルダー", "image/jpeg")
+
+        assert key.startswith("images/")
+        assert key.endswith(".jpg")
+        obj = s3.get_object(Bucket=IMAGES_BUCKET, Key=key)
+        assert obj["ContentType"] == "image/jpeg"
+
+    @mock_aws
+    @resp_mock.activate
+    def test_download_image_to_s3_backward_compat(self):
+        s3 = boto3.client("s3", region_name="ap-northeast-1")
+        s3.create_bucket(
+            Bucket=IMAGES_BUCKET,
+            CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
+        )
+
         resp_mock.add(
             resp_mock.GET,
             "https://example.com/images/hokkaido.jpg",
-            body=b"\xff\xd8\xff",  # 最小JPEGヘッダ
+            body=b"\xff\xd8\xff",
             status=200,
             headers={"Content-Type": "image/jpeg"},
         )
@@ -123,10 +158,6 @@ class TestDownloadImageToS3:
 
         assert key.startswith("images/")
         assert key.endswith(".jpg")
-
-        # S3にオブジェクトが存在することを確認
-        obj = s3.get_object(Bucket=IMAGES_BUCKET, Key=key)
-        assert obj["ContentType"] == "image/jpeg"
 
     @mock_aws
     @resp_mock.activate
@@ -151,10 +182,75 @@ class TestDownloadImageToS3:
                 "小樽運河 ダイカットキーホルダー（ちいかわ）",
             )
 
-        # S3キーに不正文字が含まれないこと
         assert "/" in key
         assert "(" not in key
         assert ")" not in key
+
+
+# ---------------------------------------------------------------------------
+# detect_characters
+# ---------------------------------------------------------------------------
+
+def _bedrock_response(characters: list[str]) -> dict:
+    """Bedrock invoke_model のレスポンス形式をシミュレートする。"""
+    body_bytes = json.dumps({
+        "content": [{"text": json.dumps(characters)}]
+    }).encode()
+    return {
+        "body": MagicMock(read=MagicMock(return_value=body_bytes))
+    }
+
+
+class TestDetectCharacters:
+
+    def test_detects_all_three_characters(self):
+        mock_bedrock = MagicMock()
+        mock_bedrock.invoke_model.return_value = _bedrock_response(
+            ["ちいかわ", "ハチワレ", "うさぎ"]
+        )
+
+        with patch("scraper.boto3") as mock_boto3:
+            mock_boto3.client.return_value = mock_bedrock
+            result = detect_characters(b"\xff\xd8\xff", "image/jpeg")
+
+        assert result == ["ちいかわ", "ハチワレ", "うさぎ"]
+
+    def test_detects_single_character(self):
+        mock_bedrock = MagicMock()
+        mock_bedrock.invoke_model.return_value = _bedrock_response(["ハチワレ"])
+
+        with patch("scraper.boto3") as mock_boto3:
+            mock_boto3.client.return_value = mock_bedrock
+            result = detect_characters(b"\xff\xd8\xff", "image/jpeg")
+
+        assert result == ["ハチワレ"]
+
+    def test_filters_invalid_characters(self):
+        """ちいかわ3キャラ以外の名前は除外される。"""
+        mock_bedrock = MagicMock()
+        mock_bedrock.invoke_model.return_value = _bedrock_response(
+            ["ちいかわ", "くりまんじゅう", "モモンガ"]
+        )
+
+        with patch("scraper.boto3") as mock_boto3:
+            mock_boto3.client.return_value = mock_bedrock
+            result = detect_characters(b"\xff\xd8\xff", "image/jpeg")
+
+        assert result == ["ちいかわ"]
+
+    def test_returns_empty_on_invalid_json(self):
+        """不正なレスポンスは空リストを返す。"""
+        body_bytes = json.dumps({"content": [{"text": "キャラクターは見つかりません"}]}).encode()
+        mock_bedrock = MagicMock()
+        mock_bedrock.invoke_model.return_value = {
+            "body": MagicMock(read=MagicMock(return_value=body_bytes))
+        }
+
+        with patch("scraper.boto3") as mock_boto3:
+            mock_boto3.client.return_value = mock_bedrock
+            result = detect_characters(b"\xff\xd8\xff", "image/jpeg")
+
+        assert result == []
 
 
 # ---------------------------------------------------------------------------
