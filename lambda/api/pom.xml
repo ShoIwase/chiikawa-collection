@@ -79,12 +79,11 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- Test: AWS SDK credentials for local DynamoDB -->
+    <!-- dynamodb が推移的に依存するため compile スコープで明示（test スコープにすると shade JAR から除外される） -->
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>auth</artifactId>
       <version>${aws.sdk.version}</version>
-      <scope>test</scope>
     </dependency>
   </dependencies>
 
