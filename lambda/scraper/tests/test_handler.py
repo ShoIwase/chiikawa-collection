@@ -44,10 +44,9 @@ def _make_table(dynamodb):
 
 def _make_bedrock_client(characters: list[str]):
     """指定キャラクターを返す Bedrock クライアントのモックを作成する。"""
-    body_bytes = json.dumps({"content": [{"text": json.dumps(characters)}]}).encode()
     mock_bedrock = MagicMock()
-    mock_bedrock.invoke_model.return_value = {
-        "body": MagicMock(read=MagicMock(return_value=body_bytes))
+    mock_bedrock.converse.return_value = {
+        "output": {"message": {"content": [{"text": json.dumps(characters)}]}}
     }
     return mock_bedrock
 

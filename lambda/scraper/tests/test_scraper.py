@@ -192,12 +192,13 @@ class TestImageFunctions:
 # ---------------------------------------------------------------------------
 
 def _bedrock_response(characters: list[str]) -> dict:
-    """Bedrock invoke_model のレスポンス形式をシミュレートする。"""
-    body_bytes = json.dumps({
-        "content": [{"text": json.dumps(characters)}]
-    }).encode()
+    """Bedrock converse のレスポンス形式をシミュレートする。"""
     return {
-        "body": MagicMock(read=MagicMock(return_value=body_bytes))
+        "output": {
+            "message": {
+                "content": [{"text": json.dumps(characters)}]
+            }
+        }
     }
 
 
@@ -205,7 +206,7 @@ class TestDetectCharacters:
 
     def test_detects_all_three_characters(self):
         mock_bedrock = MagicMock()
-        mock_bedrock.invoke_model.return_value = _bedrock_response(
+        mock_bedrock.converse.return_value = _bedrock_response(
             ["ちいかわ", "ハチワレ", "うさぎ"]
         )
 
@@ -217,7 +218,7 @@ class TestDetectCharacters:
 
     def test_detects_single_character(self):
         mock_bedrock = MagicMock()
-        mock_bedrock.invoke_model.return_value = _bedrock_response(["ハチワレ"])
+        mock_bedrock.converse.return_value = _bedrock_response(["ハチワレ"])
 
         with patch("scraper.boto3") as mock_boto3:
             mock_boto3.client.return_value = mock_bedrock
@@ -228,7 +229,7 @@ class TestDetectCharacters:
     def test_filters_invalid_characters(self):
         """ちいかわ3キャラ以外の名前は除外される。"""
         mock_bedrock = MagicMock()
-        mock_bedrock.invoke_model.return_value = _bedrock_response(
+        mock_bedrock.converse.return_value = _bedrock_response(
             ["ちいかわ", "くりまんじゅう", "モモンガ"]
         )
 
@@ -240,10 +241,9 @@ class TestDetectCharacters:
 
     def test_returns_empty_on_invalid_json(self):
         """不正なレスポンスは空リストを返す。"""
-        body_bytes = json.dumps({"content": [{"text": "キャラクターは見つかりません"}]}).encode()
         mock_bedrock = MagicMock()
-        mock_bedrock.invoke_model.return_value = {
-            "body": MagicMock(read=MagicMock(return_value=body_bytes))
+        mock_bedrock.converse.return_value = {
+            "output": {"message": {"content": [{"text": "キャラクターは見つかりません"}]}}
         }
 
         with patch("scraper.boto3") as mock_boto3:
