@@ -182,6 +182,12 @@ def detect_characters(image_data: bytes, content_type: str = "image/jpeg") -> li
     )
     text = response["output"]["message"]["content"][0]["text"].strip()
 
+    # モデルは ```json ... ``` のコードフェンスで包むことがあるため、
+    # 最初の JSON 配列 [...] のみを抽出してからパースする。
+    match = re.search(r"\[.*?\]", text, re.DOTALL)
+    if match:
+        text = match.group(0)
+
     try:
         detected = json.loads(text)
         valid = set(CHIIKAWA_CHARACTERS)
