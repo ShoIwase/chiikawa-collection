@@ -239,6 +239,21 @@ class TestDetectCharacters:
 
         assert result == ["ちいかわ"]
 
+    def test_parses_markdown_code_fenced_response(self):
+        """モデルが ```json ... ``` で包んで返しても正しくパースする。"""
+        mock_bedrock = MagicMock()
+        mock_bedrock.converse.return_value = {
+            "output": {"message": {"content": [{
+                "text": '```json\n["ちいかわ", "ハチワレ"]\n```'
+            }]}}
+        }
+
+        with patch("scraper.boto3") as mock_boto3:
+            mock_boto3.client.return_value = mock_bedrock
+            result = detect_characters(b"\xff\xd8\xff", "image/jpeg")
+
+        assert result == ["ちいかわ", "ハチワレ"]
+
     def test_returns_empty_on_invalid_json(self):
         """不正なレスポンスは空リストを返す。"""
         mock_bedrock = MagicMock()
