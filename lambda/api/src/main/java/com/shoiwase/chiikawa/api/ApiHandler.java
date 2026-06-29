@@ -12,8 +12,22 @@ import java.util.Map;
 public class ApiHandler implements RequestHandler<APIGatewayV2HTTPEvent, APIGatewayV2HTTPResponse> {
 
     // SnapStart: 静的初期化はスナップショットに含まれ、コールドスタートを短縮する
-    private static final CollectionRoute COLLECTION = new CollectionRoute();
-    private static final MasterRoute     MASTER     = new MasterRoute();
+    private static final CollectionRoute SHARED_COLLECTION = new CollectionRoute();
+    private static final MasterRoute     SHARED_MASTER     = new MasterRoute();
+
+    private final CollectionRoute collection;
+    private final MasterRoute master;
+
+    public ApiHandler() {
+        this.collection = SHARED_COLLECTION;
+        this.master     = SHARED_MASTER;
+    }
+
+    // テスト用: ルートを注入
+    ApiHandler(CollectionRoute collection, MasterRoute master) {
+        this.collection = collection;
+        this.master     = master;
+    }
 
     @Override
     public APIGatewayV2HTTPResponse handleRequest(APIGatewayV2HTTPEvent event, Context context) {
@@ -22,13 +36,13 @@ public class ApiHandler implements RequestHandler<APIGatewayV2HTTPEvent, APIGate
 
         try {
             if ("GET".equals(method) && "/items".equals(path))
-                return COLLECTION.getItems();
+                return collection.getItems();
             if ("GET".equals(method) && "/items/pending".equals(path))
-                return MASTER.getPendingItems();
+                return master.getPendingItems();
             if ("PUT".equals(method) && path.matches("/items/[^/]+/status"))
-                return COLLECTION.updateStatus(event);
+                return collection.updateStatus(event);
             if ("PUT".equals(method) && path.matches("/items/[^/]+/verify"))
-                return MASTER.verifyItem(event);
+                return master.verifyItem(event);
 
             return err(404, "Not Found");
         } catch (Exception e) {

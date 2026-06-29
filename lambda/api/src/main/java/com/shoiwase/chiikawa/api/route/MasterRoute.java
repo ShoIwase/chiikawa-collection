@@ -90,15 +90,19 @@ public class MasterRoute {
             values.put(":motif", AttributeValue.fromS((String) body.get("motif")));
         }
 
-        client.updateItem(UpdateItemRequest.builder()
-                .tableName(Db.MASTER_TABLE)
-                .key(Map.of(
-                        "Category", AttributeValue.fromS("KeyChain"),
-                        "ItemName", AttributeValue.fromS(itemName)))
-                .updateExpression("SET " + String.join(", ", setClauses))
-                .expressionAttributeValues(values)
-                .conditionExpression("attribute_exists(ItemName)")
-                .build());
+        try {
+            client.updateItem(UpdateItemRequest.builder()
+                    .tableName(Db.MASTER_TABLE)
+                    .key(Map.of(
+                            "Category", AttributeValue.fromS("KeyChain"),
+                            "ItemName", AttributeValue.fromS(itemName)))
+                    .updateExpression("SET " + String.join(", ", setClauses))
+                    .expressionAttributeValues(values)
+                    .conditionExpression("attribute_exists(ItemName)")
+                    .build());
+        } catch (ConditionalCheckFailedException e) {
+            return err(404, "Item not found: " + itemName);
+        }
 
         return ok("{\"success\":true}");
     }

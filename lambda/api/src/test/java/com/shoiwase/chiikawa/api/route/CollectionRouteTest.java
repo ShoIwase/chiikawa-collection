@@ -145,9 +145,60 @@ class CollectionRouteTest {
         assertEquals(400, resp.getStatusCode());
     }
 
+    @Test
+    void getItems_paginatesAcrossMultiplePages() throws Exception {
+        var item1 = masterItem("北海道 ダイカットキーホルダー");
+        var item2 = masterItem("沖縄 ダイカットキーホルダー");
+        var lastKey = Map.of("Category", AttributeValue.fromS("KeyChain"),
+                             "ItemName", AttributeValue.fromS("北海道 ダイカットキーホルダー"));
+
+        // 1ページ目: lastEvaluatedKey あり、2ページ目: なし
+        when(mockClient.query(any(QueryRequest.class)))
+                .thenReturn(QueryResponse.builder().items(List.of(item1)).lastEvaluatedKey(lastKey).build())
+                .thenReturn(QueryResponse.builder().items(List.of(item2)).build());
+        when(mockClient.batchGetItem(any(BatchGetItemRequest.class)))
+                .thenReturn(BatchGetItemResponse.builder()
+                        .responses(Map.of("UserCollection", List.of()))
+                        .build());
+
+        var resp = route.getItems();
+
+        assertEquals(200, resp.getStatusCode());
+        var items = mapper.readTree(resp.getBody()).get("items");
+        assertEquals(2, items.size());
+        verify(mockClient, times(2)).query(any(QueryRequest.class));
+    }
+
+    @Test
+    void updateStatus_ownedFalse_updatesStatus() {
+        when(mockClient.updateItem(any(UpdateItemRequest.class)))
+                .thenReturn(UpdateItemResponse.builder().build());
+
+        var captor = ArgumentCaptor.forClass(UpdateItemRequest.class);
+        var event = eventWithPath("沖縄%20ダイカットキーホルダー", "{\"owned\":false}");
+        assertDoesNotThrow(() -> route.updateStatus(event));
+
+        verify(mockClient).updateItem(captor.capture());
+        assertFalse(captor.getValue()
+                .expressionAttributeValues().get(":status").bool());
+    }
+
     // -----------------------------------------------------------------------
     // helpers
     // -----------------------------------------------------------------------
+
+    private static Map<String, AttributeValue> masterItem(String name) {
+        return Map.of(
+                "Category",   av("KeyChain"),
+                "ItemName",   av(name),
+                "Motif",      av("ちいかわ"),
+                "AreaType",   av("都道府県"),
+                "AreaName",   av("北海道"),
+                "ImageUrl",   av(""),
+                "IsVerified", AttributeValue.fromBool(true),
+                "CreatedAt",  av("2026-01-01T00:00:00Z")
+        );
+    }
 
     private static AttributeValue av(String s) {
         return AttributeValue.fromS(s);

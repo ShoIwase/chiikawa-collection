@@ -116,6 +116,16 @@ class MasterRouteTest {
         assertEquals(400, resp.getStatusCode());
     }
 
+    @Test
+    void verifyItem_itemNotFound_returns404() throws Exception {
+        when(mockClient.updateItem(any(UpdateItemRequest.class)))
+                .thenThrow(ConditionalCheckFailedException.builder()
+                        .message("The conditional request failed").build());
+
+        var resp = route.verifyItem(eventWithPath("存在しないアイテム", "{}"));
+        assertEquals(404, resp.getStatusCode());
+    }
+
     // -----------------------------------------------------------------------
     // helpers
     // -----------------------------------------------------------------------
