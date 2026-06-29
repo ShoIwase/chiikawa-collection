@@ -17,7 +17,7 @@ TARGET_URL: str = os.environ["TARGET_URL"]
 _dynamodb = boto3.resource("dynamodb")
 _table = _dynamodb.Table(MASTER_TABLE)
 
-CLOUDFRONT_IMAGES_PREFIX = "/images/"
+CLOUDFRONT_IMAGES_PREFIX = "/"
 
 
 def lambda_handler(event: dict, context: object) -> dict:
