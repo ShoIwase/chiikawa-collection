@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "@/lib/auth";
+import { getCurrentUser, signIn, signOut } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,11 +11,18 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // ログイン済みの場合はコレクションページへ
+  useEffect(() => {
+    getCurrentUser().then(() => router.replace("/collection/")).catch(() => {});
+  }, [router]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
+      // 既存セッションが残っている場合はサインアウトしてから再ログイン
+      await signOut().catch(() => {});
       await signIn({ username, password });
       router.replace("/collection/");
     } catch (err: unknown) {
