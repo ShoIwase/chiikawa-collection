@@ -6,23 +6,26 @@ import type { CollectionItem } from "@/lib/types";
 type Props = {
   item: CollectionItem;
   onToggle: (item: CollectionItem) => void;
+  onZoom?: (imageUrl: string, alt: string) => void;
 };
 
 const CLOUDFRONT_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL ?? "";
 
-export default function ItemCard({ item, onToggle }: Props) {
+export default function ItemCard({ item, onToggle, onZoom }: Props) {
   const imageUrl = item.ImageUrl ? `${CLOUDFRONT_URL}${item.ImageUrl}` : "/no-image.png";
 
   return (
-    <button
-      onClick={() => onToggle(item)}
-      className={`relative rounded-2xl overflow-hidden shadow-sm transition-all active:scale-95 ${
-        item.Owned
-          ? "ring-2 ring-pink-400 opacity-100"
-          : "opacity-50 grayscale"
+    <div
+      className={`relative rounded-2xl overflow-hidden shadow-sm transition-all ${
+        item.Owned ? "ring-2 ring-pink-400" : "opacity-50 grayscale"
       }`}
     >
-      <div className="aspect-square bg-gray-100 relative">
+      {/* 画像エリア: タップで拡大 */}
+      <button
+        onClick={() => onZoom?.(imageUrl, item.ItemName)}
+        className="w-full aspect-square bg-gray-100 relative block active:scale-95 transition-transform"
+        aria-label={`${item.ItemName} を拡大`}
+      >
         <Image
           src={imageUrl}
           alt={item.ItemName}
@@ -35,13 +38,22 @@ export default function ItemCard({ item, onToggle }: Props) {
             ✓
           </div>
         )}
-      </div>
-      <div className="p-2 bg-white text-left">
+        <div className="absolute bottom-1 right-1 bg-black/40 text-white text-xs rounded px-1">
+          🔍
+        </div>
+      </button>
+
+      {/* テキストエリア: タップで所持トグル */}
+      <button
+        onClick={() => onToggle(item)}
+        className="w-full p-2 bg-white text-left active:bg-pink-50 transition-colors"
+        aria-label={`${item.ItemName} の所持をトグル`}
+      >
         <p className="text-xs font-medium text-gray-700 line-clamp-2 leading-tight">
           {item.ItemName}
         </p>
         <p className="text-xs text-gray-400 mt-0.5">{item.AreaName}</p>
-      </div>
-    </button>
+      </button>
+    </div>
   );
 }

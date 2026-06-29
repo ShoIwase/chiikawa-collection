@@ -7,6 +7,7 @@ import AuthGuard from "@/components/AuthGuard";
 import AlertBanner from "@/components/AlertBanner";
 import FilterBar from "@/components/FilterBar";
 import CollectionGrid from "@/components/CollectionGrid";
+import ImageLightbox from "@/components/ImageLightbox";
 import { getCollectionItems, getPendingItems, updateItemStatus } from "@/lib/api";
 import type { CollectionItem } from "@/lib/types";
 
@@ -21,6 +22,7 @@ export default function CollectionPage() {
   const [areaName, setAreaName] = useState("");
   const [searchText, setSearchText] = useState("");
   const [showOwnedOnly, setShowOwnedOnly] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
 
   useEffect(() => {
     Promise.all([getCollectionItems(), getPendingItems()])
@@ -104,8 +106,21 @@ export default function CollectionPage() {
           </div>
         )}
         {error && <p className="text-red-500 text-sm">{error}</p>}
-        {!loading && <CollectionGrid items={filtered} onToggle={handleToggle} />}
+        {!loading && (
+          <CollectionGrid
+            items={filtered}
+            onToggle={handleToggle}
+            onZoom={(src, alt) => setZoomedImage({ src, alt })}
+          />
+        )}
       </div>
+      {zoomedImage && (
+        <ImageLightbox
+          src={zoomedImage.src}
+          alt={zoomedImage.alt}
+          onClose={() => setZoomedImage(null)}
+        />
+      )}
     </AuthGuard>
   );
 }
