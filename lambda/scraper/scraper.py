@@ -149,6 +149,43 @@ def download_image_to_s3(image_url: str, item_name: str) -> str:
     return upload_image_to_s3(data, item_name, content_type)
 
 
+# 商品画像はちいかわ(左)/ハチワレ(中)/うさぎ(右)の3キャラが横並び。
+# 列インデックスでキャラの部分だけを切り出す。
+_CHAR_COLUMN = {"ちいかわ": 0, "ハチワレ": 1, "うさぎ": 2}
+_CROP_BOTTOM_RATIO = 0.80  # 下のキャプション帯を除く
+
+
+def crop_character(image_data: bytes, content_type: str, character: str) -> bytes:
+    """3キャラ横並び画像から、指定キャラの列だけを切り出して返す。
+
+    一覧でどのキャラのエントリか一目で分かるようにするための加工。
+    対象外キャラや失敗時は元画像をそのまま返す（フォールバック）。
+    """
+    col = _CHAR_COLUMN.get(character)
+    if col is None:
+        return image_data
+    try:
+        import io
+        from PIL import Image
+
+        im = Image.open(io.BytesIO(image_data))
+        width, height = im.size
+        bottom = int(height * _CROP_BOTTOM_RATIO)
+        left = width * col // 3
+        right = width * (col + 1) // 3
+        crop = im.crop((left, 0, right, bottom))
+
+        fmt = im.format
+        if not fmt:
+            fmt = "PNG" if "png" in content_type.lower() else "JPEG"
+        out = io.BytesIO()
+        crop.save(out, format=fmt)
+        return out.getvalue()
+    except Exception as e:  # noqa: BLE001 - 失敗時は元画像にフォールバック
+        logger.warning("crop_character failed for %s: %s", character, e)
+        return image_data
+
+
 def _clean_region(region: str) -> str:
     """画像から抽出した地域ラベルを正規化する（『静岡限定』→『静岡』）。"""
     region = str(region).strip()
