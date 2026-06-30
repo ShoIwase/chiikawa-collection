@@ -13,18 +13,21 @@ MASTER_TABLE   = "ChiikawaMaster"
 TARGET_URL     = "https://www.jp-api.com/contents/NOD62/"
 
 # scraper.py は resp.encoding = "shift_jis" で強制デコードするため、
-# モックレスポンスも Shift-JIS バイト列にする必要がある
+# モックレスポンスも Shift-JIS バイト列にする必要がある。
+# 画像URLは数値ID付き(tphoto_5000_b.png)にして SourceImageId を持たせる。
 MINIMAL_HTML_BYTES = """
 <html><body>
 <div class="item">
-  <a class="lightbox" href="/images/hokkaido_b.png" title="北海道 ダイカットキーホルダー">
-    <img src="/images/hokkaido_b.png" alt="北海道 ダイカットキーホルダー"/>
+  <a class="lightbox" href="/images/tphoto_5000_b.png" title="北海道 ダイカットキーホルダー">
+    <img src="/images/tphoto_5000_b.png" alt="北海道 ダイカットキーホルダー"/>
   </a>
   <p class="itemname"><a href="#">北海道 ダイカットキーホルダー</a></p>
   <p class="character">ちいかわ</p>
 </div>
 </body></html>
 """.encode("shift_jis")
+
+HOKKAIDO_IMG = "https://www.jp-api.com/images/tphoto_5000_b.png"
 
 
 def _make_table(dynamodb):
@@ -42,18 +45,22 @@ def _make_table(dynamodb):
     )
 
 
-def _converse_payload(characters: list[str], region: str = "") -> dict:
+def _converse_payload(characters: list[str], region: str = "", area_type: str = "") -> dict:
     return {
         "output": {"message": {"content": [{
-            "text": json.dumps({"characters": characters, "region": region})
+            "text": json.dumps({
+                "characters": characters,
+                "region": region,
+                "areaType": area_type,
+            })
         }]}}
     }
 
 
-def _make_bedrock_client(characters: list[str], region: str = ""):
-    """指定キャラクター・地域を返す Bedrock クライアントのモックを作成する。"""
+def _make_bedrock_client(characters: list[str], region: str = "", area_type: str = ""):
+    """指定キャラクター・地域・エリア種別を返す Bedrock クライアントのモックを作成する。"""
     mock_bedrock = MagicMock()
-    mock_bedrock.converse.return_value = _converse_payload(characters, region)
+    mock_bedrock.converse.return_value = _converse_payload(characters, region, area_type)
     return mock_bedrock
 
 
@@ -67,12 +74,24 @@ def _env(extra: dict = {}) -> dict:
     return {**base, **extra}
 
 
+def _add_target(html=MINIMAL_HTML_BYTES):
+    resp_mock.add(resp_mock.GET, TARGET_URL, body=html, status=200,
+                  headers={"Content-Type": "text/html; charset=shift_jis"})
+
+
+def _add_image(url=HOKKAIDO_IMG, status=200):
+    kwargs = {"status": status}
+    if status == 200:
+        kwargs.update(body=b"\xff\xd8\xff", headers={"Content-Type": "image/jpeg"})
+    resp_mock.add(resp_mock.GET, url, **kwargs)
+
+
 class TestHandlerCharacterSplitting:
 
     @mock_aws
     @resp_mock.activate
     def test_creates_three_entries_when_all_characters_detected(self):
-        """画像から3キャラが検出された場合、3件のDynamoDBエントリが作成される。"""
+        """画像から3キャラが検出された場合、3件のDynamoDBエントリが作成される（キャラ先頭命名）。"""
         dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
         table = _make_table(dynamodb)
 
@@ -82,17 +101,12 @@ class TestHandlerCharacterSplitting:
             CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
         )
 
-        resp_mock.add(resp_mock.GET, TARGET_URL, body=MINIMAL_HTML_BYTES, status=200,
-                      headers={"Content-Type": "text/html; charset=shift_jis"})
-        resp_mock.add(
-            resp_mock.GET,
-            "https://www.jp-api.com/images/hokkaido_b.png",
-            body=b"\xff\xd8\xff",
-            status=200,
-            headers={"Content-Type": "image/jpeg"},
-        )
+        _add_target()
+        _add_image()
 
-        mock_bedrock = _make_bedrock_client(["ちいかわ", "ハチワレ", "うさぎ"])
+        mock_bedrock = _make_bedrock_client(
+            ["ちいかわ", "ハチワレ", "うさぎ"], region="北海道", area_type="都道府県"
+        )
 
         with patch.dict(os.environ, _env()):
             with patch("scraper.boto3") as mock_scraper_boto3:
@@ -103,13 +117,45 @@ class TestHandlerCharacterSplitting:
         assert result["statusCode"] == 200
 
         for character in ["ちいかわ", "ハチワレ", "うさぎ"]:
-            entry_name = f"北海道 ダイカットキーホルダー {character}"
+            entry_name = f"{character}　北海道　ダイカットキーホルダー"
             item = table.get_item(
                 Key={"Category": "KeyChain", "ItemName": entry_name}
             ).get("Item")
             assert item is not None, f"エントリが存在しない: {entry_name}"
             assert item["Motif"] == character
+            assert item["AreaType"] == "都道府県"
+            assert item["AreaName"] == "北海道"
             assert item["ImageUrl"].startswith("/images/")
+            assert item["SourceImageId"] == "5000"
+
+    @mock_aws
+    @resp_mock.activate
+    def test_auto_tags_character_and_area(self):
+        """新規作成時に Tags へ [キャラ, 地名] が自動付与される。"""
+        dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
+        table = _make_table(dynamodb)
+
+        s3 = boto3.client("s3", region_name="ap-northeast-1")
+        s3.create_bucket(
+            Bucket=IMAGES_BUCKET,
+            CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
+        )
+
+        _add_target()
+        _add_image()
+
+        mock_bedrock = _make_bedrock_client(["うさぎ"], region="北海道", area_type="都道府県")
+
+        with patch.dict(os.environ, _env()):
+            with patch("scraper.boto3") as mock_scraper_boto3:
+                mock_scraper_boto3.client.return_value = mock_bedrock
+                from handler import lambda_handler
+                lambda_handler({}, MagicMock())
+
+        item = table.get_item(
+            Key={"Category": "KeyChain", "ItemName": "うさぎ　北海道　ダイカットキーホルダー"}
+        )["Item"]
+        assert item["Tags"] == {"うさぎ", "北海道"}
 
     @mock_aws
     @resp_mock.activate
@@ -124,16 +170,10 @@ class TestHandlerCharacterSplitting:
             CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
         )
 
-        resp_mock.add(resp_mock.GET, TARGET_URL, body=MINIMAL_HTML_BYTES, status=200)
-        resp_mock.add(
-            resp_mock.GET,
-            "https://www.jp-api.com/images/hokkaido_b.png",
-            body=b"\xff\xd8\xff",
-            status=200,
-            headers={"Content-Type": "image/jpeg"},
-        )
+        _add_target()
+        _add_image()
 
-        mock_bedrock = _make_bedrock_client(["ハチワレ"])
+        mock_bedrock = _make_bedrock_client(["ハチワレ"], region="北海道", area_type="都道府県")
 
         with patch.dict(os.environ, _env()):
             with patch("scraper.boto3") as mock_scraper_boto3:
@@ -142,14 +182,14 @@ class TestHandlerCharacterSplitting:
                 lambda_handler({}, MagicMock())
 
         hachiware_item = table.get_item(
-            Key={"Category": "KeyChain", "ItemName": "北海道 ダイカットキーホルダー ハチワレ"}
+            Key={"Category": "KeyChain", "ItemName": "ハチワレ　北海道　ダイカットキーホルダー"}
         ).get("Item")
         assert hachiware_item is not None
 
         # ちいかわ・うさぎは登録されないこと
         for char in ["ちいかわ", "うさぎ"]:
             other_item = table.get_item(
-                Key={"Category": "KeyChain", "ItemName": f"北海道 ダイカットキーホルダー {char}"}
+                Key={"Category": "KeyChain", "ItemName": f"{char}　北海道　ダイカットキーホルダー"}
             ).get("Item")
             assert other_item is None, f"{char} が余分に登録された"
 
@@ -166,16 +206,10 @@ class TestHandlerCharacterSplitting:
             CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
         )
 
-        resp_mock.add(resp_mock.GET, TARGET_URL, body=MINIMAL_HTML_BYTES, status=200)
-        resp_mock.add(
-            resp_mock.GET,
-            "https://www.jp-api.com/images/hokkaido_b.png",
-            body=b"\xff\xd8\xff",
-            status=200,
-            headers={"Content-Type": "image/jpeg"},
-        )
+        _add_target()
+        _add_image()
 
-        mock_bedrock = _make_bedrock_client([])  # 空=検出失敗
+        mock_bedrock = _make_bedrock_client([])  # 空=検出失敗、region も空
 
         with patch.dict(os.environ, _env()):
             with patch("scraper.boto3") as mock_scraper_boto3:
@@ -183,24 +217,26 @@ class TestHandlerCharacterSplitting:
                 from handler import lambda_handler
                 lambda_handler({}, MagicMock())
 
-        # フォールバックは _guess_motif("北海道 ダイカットキーホルダー") = "ちいかわ"
+        # フォールバック: characters=[_guess_motif("北海道 …")="ちいかわ"]、region空→名前から推測
         item = table.get_item(
-            Key={"Category": "KeyChain", "ItemName": "北海道 ダイカットキーホルダー ちいかわ"}
+            Key={"Category": "KeyChain", "ItemName": "ちいかわ　北海道　ダイカットキーホルダー"}
         ).get("Item")
         assert item is not None
         assert item["Motif"] == "ちいかわ"
+        assert item["AreaType"] == "都道府県"
+        assert item["AreaName"] == "北海道"
 
 
 _COLLISION_HTML_BYTES = """
 <html><body>
 <div class="item">
-  <a class="lightbox" href="/images/tphoto_111_0_b.png" title="みかん ダイカットキーホルダー">
-    <img src="/images/tphoto_111_0_b.png" alt="みかん ダイカットキーホルダー"/>
+  <a class="lightbox" href="/images/tphoto_1110_0_b.png" title="みかん ダイカットキーホルダー">
+    <img src="/images/tphoto_1110_0_b.png" alt="みかん ダイカットキーホルダー"/>
   </a>
 </div>
 <div class="item">
-  <a class="lightbox" href="/images/tphoto_222_0_b.png" title="みかん ダイカットキーホルダー">
-    <img src="/images/tphoto_222_0_b.png" alt="みかん ダイカットキーホルダー"/>
+  <a class="lightbox" href="/images/tphoto_2220_0_b.png" title="みかん ダイカットキーホルダー">
+    <img src="/images/tphoto_2220_0_b.png" alt="みかん ダイカットキーホルダー"/>
   </a>
 </div>
 </body></html>
@@ -222,21 +258,15 @@ class TestHandlerCollisionDisambiguation:
             CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
         )
 
-        resp_mock.add(resp_mock.GET, TARGET_URL, body=_COLLISION_HTML_BYTES, status=200)
-        for pid in ("111", "222"):
-            resp_mock.add(
-                resp_mock.GET,
-                f"https://www.jp-api.com/images/tphoto_{pid}_0_b.png",
-                body=b"\xff\xd8\xff",
-                status=200,
-                headers={"Content-Type": "image/jpeg"},
-            )
+        _add_target(_COLLISION_HTML_BYTES)
+        for pid in ("1110", "2220"):
+            _add_image(f"https://www.jp-api.com/images/tphoto_{pid}_0_b.png")
 
         # 1件目は静岡、2件目は和歌山を返す
         mock_bedrock = MagicMock()
         mock_bedrock.converse.side_effect = [
-            _converse_payload(["ちいかわ", "ハチワレ", "うさぎ"], region="静岡"),
-            _converse_payload(["ちいかわ", "ハチワレ", "うさぎ"], region="和歌山"),
+            _converse_payload(["ちいかわ", "ハチワレ", "うさぎ"], region="静岡", area_type="都道府県"),
+            _converse_payload(["ちいかわ", "ハチワレ", "うさぎ"], region="和歌山", area_type="都道府県"),
         ]
 
         with patch.dict(os.environ, _env()):
@@ -248,15 +278,108 @@ class TestHandlerCollisionDisambiguation:
         # 静岡・和歌山それぞれ3キャラ = 計6エントリが揃うこと
         for region in ("静岡", "和歌山"):
             for character in ("ちいかわ", "ハチワレ", "うさぎ"):
-                name = f"{region}　みかん ダイカットキーホルダー {character}"
+                name = f"{character}　{region} みかん　ダイカットキーホルダー"
                 item = table.get_item(
                     Key={"Category": "KeyChain", "ItemName": name}
                 ).get("Item")
                 assert item is not None, f"エントリが存在しない: {name}"
+                assert item["AreaType"] == "都道府県"
                 assert item["AreaName"] == region
 
         cnt = table.scan(Select="COUNT")["Count"]
         assert cnt == 6, f"期待6件に対し {cnt} 件"
+
+
+class TestHandlerAreaOther:
+
+    @mock_aws
+    @resp_mock.activate
+    def test_region_other_bucket(self):
+        """広域（関西など）は AreaType=その他 に分類される。"""
+        dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
+        table = _make_table(dynamodb)
+
+        s3 = boto3.client("s3", region_name="ap-northeast-1")
+        s3.create_bucket(
+            Bucket=IMAGES_BUCKET,
+            CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
+        )
+
+        html = """
+<html><body>
+<div class="item">
+  <a class="lightbox" href="/images/tphoto_7770_b.png" title="たこ焼き ダイカットキーホルダー">
+    <img src="/images/tphoto_7770_b.png" alt="たこ焼き ダイカットキーホルダー"/>
+  </a>
+</div>
+</body></html>
+""".encode("shift_jis")
+        _add_target(html)
+        _add_image("https://www.jp-api.com/images/tphoto_7770_b.png")
+
+        mock_bedrock = _make_bedrock_client(["ちいかわ"], region="関西", area_type="その他")
+
+        with patch.dict(os.environ, _env()):
+            with patch("scraper.boto3") as mock_scraper_boto3:
+                mock_scraper_boto3.client.return_value = mock_bedrock
+                from handler import lambda_handler
+                lambda_handler({}, MagicMock())
+
+        item = table.get_item(
+            Key={"Category": "KeyChain", "ItemName": "ちいかわ　関西 たこ焼き　ダイカットキーホルダー"}
+        ).get("Item")
+        assert item is not None
+        assert item["AreaType"] == "その他"
+        assert item["AreaName"] == "関西"
+
+
+class TestHandlerIncrementalSkip:
+
+    @mock_aws
+    @resp_mock.activate
+    def test_skips_product_with_existing_source_image_id(self):
+        """SourceImageId が既出の商品は丸ごとスキップされる。"""
+        dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
+        table = _make_table(dynamodb)
+        # 画像ID=111 の商品は登録済みとする
+        table.put_item(Item={
+            "Category": "KeyChain",
+            "ItemName": "ちいかわ　静岡 みかん　ダイカットキーホルダー",
+            "Motif": "ちいかわ",
+            "AreaType": "都道府県",
+            "AreaName": "静岡",
+            "ImageUrl": "/images/x.jpg",
+            "IsVerified": False,
+            "CreatedAt": "2026-01-01T00:00:00Z",
+            "SourceImageId": "1110",
+        })
+
+        s3 = boto3.client("s3", region_name="ap-northeast-1")
+        s3.create_bucket(
+            Bucket=IMAGES_BUCKET,
+            CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
+        )
+
+        _add_target(_COLLISION_HTML_BYTES)
+        # 222 のみ取得される想定（111はスキップ）
+        _add_image("https://www.jp-api.com/images/tphoto_2220_0_b.png")
+
+        mock_bedrock = _make_bedrock_client(
+            ["ちいかわ", "ハチワレ", "うさぎ"], region="和歌山", area_type="都道府県"
+        )
+
+        with patch.dict(os.environ, _env()):
+            with patch("scraper.boto3") as mock_scraper_boto3:
+                mock_scraper_boto3.client.return_value = mock_bedrock
+                from handler import lambda_handler
+                result = lambda_handler({}, MagicMock())
+
+        assert result["statusCode"] == 200
+        # 111(静岡)は再取得されず1件のまま、222(和歌山)が3件追加 → 計4件
+        cnt = table.scan(Select="COUNT")["Count"]
+        assert cnt == 4, f"期待4件に対し {cnt} 件"
+        # Bedrock は222の1回のみ呼ばれる
+        assert mock_bedrock.converse.call_count == 1
 
 
 class TestHandlerImageUrl:
@@ -274,17 +397,10 @@ class TestHandlerImageUrl:
             CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
         )
 
-        resp_mock.add(resp_mock.GET, TARGET_URL, body=MINIMAL_HTML_BYTES, status=200,
-                      headers={"Content-Type": "text/html; charset=shift_jis"})
-        resp_mock.add(
-            resp_mock.GET,
-            "https://www.jp-api.com/images/hokkaido_b.png",
-            body=b"\xff\xd8\xff",
-            status=200,
-            headers={"Content-Type": "image/jpeg"},
-        )
+        _add_target()
+        _add_image()
 
-        mock_bedrock = _make_bedrock_client(["ちいかわ"])
+        mock_bedrock = _make_bedrock_client(["ちいかわ"], region="北海道", area_type="都道府県")
 
         with patch.dict(os.environ, _env()):
             with patch("scraper.boto3") as mock_scraper_boto3:
@@ -295,7 +411,7 @@ class TestHandlerImageUrl:
         dynamodb2 = boto3.resource("dynamodb", region_name="ap-northeast-1")
         table2 = dynamodb2.Table(MASTER_TABLE)
         item = table2.get_item(
-            Key={"Category": "KeyChain", "ItemName": "北海道 ダイカットキーホルダー ちいかわ"}
+            Key={"Category": "KeyChain", "ItemName": "ちいかわ　北海道　ダイカットキーホルダー"}
         )["Item"]
 
         image_url = item["ImageUrl"]
@@ -318,15 +434,10 @@ class TestHandlerImageUrl:
             CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
         )
 
-        resp_mock.add(resp_mock.GET, TARGET_URL, body=MINIMAL_HTML_BYTES, status=200,
-                      headers={"Content-Type": "text/html; charset=shift_jis"})
-        resp_mock.add(
-            resp_mock.GET,
-            "https://www.jp-api.com/images/hokkaido_b.png",
-            status=404,
-        )
+        _add_target()
+        _add_image(status=404)
 
-        # 画像DL失敗時はdetect_characterを呼ばない → Bedrockモック不要
+        # 画像DL失敗時は analyze_image を呼ばない → Bedrockモック不要
         with patch.dict(os.environ, _env()):
             with patch("scraper.boto3"):
                 from handler import lambda_handler
@@ -339,7 +450,7 @@ class TestHandlerImageUrl:
 
         # フォールバック: motif="ちいかわ"(デフォルト) でエントリが作られる
         item = table2.get_item(
-            Key={"Category": "KeyChain", "ItemName": "北海道 ダイカットキーホルダー ちいかわ"}
+            Key={"Category": "KeyChain", "ItemName": "ちいかわ　北海道　ダイカットキーホルダー"}
         ).get("Item")
 
         if item:

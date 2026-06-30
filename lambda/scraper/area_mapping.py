@@ -34,27 +34,59 @@ _SUFFIXES = re.compile(
 )
 
 
+AREA_TYPES = ("都道府県", "市区町村", "その他")
+
+
 def predict_area(item_name: str) -> tuple[str, str]:
     """
-    商品名からエリア種別とエリア名を予測する。
-    マッチしない場合は ('市町村', <推測地名>) を返す。
+    商品名からエリア種別とエリア名を予測する（画像から地域が取れない時のフォールバック）。
+    エリア種別は 都道府県 / 市区町村 / その他 の3分類。
     """
     # 都道府県（完全一致優先）
     for pref in PREFECTURES:
         if pref in item_name:
             return ("都道府県", pref)
 
-    # 温泉地・観光地
-    for spring in HOT_SPRINGS:
-        if spring in item_name:
-            return ("温泉地", spring)
-
-    # 海外
+    # 海外は「その他」
     for place in OVERSEAS:
         if place in item_name:
-            return ("海外", place)
+            return ("その他", place)
+
+    # 温泉地・観光地は実在の市区町村（箱根町・別府市など）として扱う
+    for spring in HOT_SPRINGS:
+        if spring in item_name:
+            return ("市区町村", spring)
 
     # フォールバック: 最初のスペース/全角スペース区切りの最初のトークンを地名と推定
     first_token = re.split(r"[\s　　]", item_name)[0]
     area_name = _SUFFIXES.sub("", first_token) or first_token
-    return ("市町村", area_name)
+    return ("市区町村", area_name)
+
+
+def classify_area(region: str, area_type_hint: str = "") -> tuple[str, str]:
+    """画像から抽出した地域名(region)とモデルのエリア種別ヒントから (AreaType, AreaName) を返す。
+
+    - 都道府県は PREFECTURES リストで決定的に判定（ヒントより優先）
+    - 海外は OVERSEAS リストで「その他」に固定（モデル誤分類のガード）
+    - 市区町村 / その他 はモデルのヒントを採用
+    - ヒントが都道府県だが県リスト外なら「その他」に降格（関西・東海などの広域対策）
+    """
+    region = (region or "").strip()
+    if not region:
+        return ("その他", "")
+
+    for pref in PREFECTURES:
+        if pref in region:
+            return ("都道府県", pref)
+
+    for place in OVERSEAS:
+        if place in region:
+            return ("その他", region)
+
+    if area_type_hint in AREA_TYPES:
+        if area_type_hint == "都道府県":
+            # 県リストに無い「都道府県」判定は広域名などの可能性が高いため降格
+            return ("その他", region)
+        return (area_type_hint, region)
+
+    return ("その他", region)

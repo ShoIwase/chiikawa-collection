@@ -191,12 +191,13 @@ class TestImageFunctions:
 # analyze_image
 # ---------------------------------------------------------------------------
 
-def _bedrock_response(characters: list[str], region: str = "") -> dict:
-    """Bedrock converse のレスポンス形式（characters + region オブジェクト）をシミュレートする。"""
+def _bedrock_response(characters: list[str], region: str = "", area_type: str = "") -> dict:
+    """Bedrock converse のレスポンス形式（characters + region + areaType）をシミュレートする。"""
+    payload = {"characters": characters, "region": region, "areaType": area_type}
     return {
         "output": {
             "message": {
-                "content": [{"text": json.dumps({"characters": characters, "region": region})}]
+                "content": [{"text": json.dumps(payload)}]
             }
         }
     }
@@ -226,11 +227,11 @@ class TestAnalyzeImage:
 
         assert result["characters"] == ["ハチワレ"]
 
-    def test_extracts_region(self):
-        """画像から地域名を抽出する。"""
+    def test_extracts_region_and_area_type(self):
+        """画像から地域名とエリア種別を抽出する。"""
         mock_bedrock = MagicMock()
         mock_bedrock.converse.return_value = _bedrock_response(
-            ["ちいかわ", "ハチワレ", "うさぎ"], region="静岡"
+            ["ちいかわ", "ハチワレ", "うさぎ"], region="静岡", area_type="都道府県"
         )
 
         with patch("scraper.boto3") as mock_boto3:
@@ -238,6 +239,20 @@ class TestAnalyzeImage:
             result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
 
         assert result["region"] == "静岡"
+        assert result["areaType"] == "都道府県"
+
+    def test_invalid_area_type_normalized_to_empty(self):
+        """3値以外の areaType は空文字に正規化される。"""
+        mock_bedrock = MagicMock()
+        mock_bedrock.converse.return_value = _bedrock_response(
+            ["ちいかわ"], region="鎌倉", area_type="県"
+        )
+
+        with patch("scraper.boto3") as mock_boto3:
+            mock_boto3.client.return_value = mock_bedrock
+            result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
+
+        assert result["areaType"] == ""
 
     def test_strips_gentei_suffix_from_region(self):
         """『静岡限定』のような表記から『限定』を除去する。"""
@@ -268,7 +283,7 @@ class TestAnalyzeImage:
         mock_bedrock = MagicMock()
         mock_bedrock.converse.return_value = {
             "output": {"message": {"content": [{
-                "text": '```json\n{"characters": ["ちいかわ", "ハチワレ"], "region": "京都"}\n```'
+                "text": '```json\n{"characters": ["ちいかわ", "ハチワレ"], "region": "京都", "areaType": "都道府県"}\n```'
             }]}}
         }
 
@@ -278,6 +293,7 @@ class TestAnalyzeImage:
 
         assert result["characters"] == ["ちいかわ", "ハチワレ"]
         assert result["region"] == "京都"
+        assert result["areaType"] == "都道府県"
 
     def test_returns_empty_on_invalid_json(self):
         """不正なレスポンスは空の結果を返す。"""
@@ -290,7 +306,7 @@ class TestAnalyzeImage:
             mock_boto3.client.return_value = mock_bedrock
             result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
 
-        assert result == {"characters": [], "region": ""}
+        assert result == {"characters": [], "region": "", "areaType": ""}
 
 
 # ---------------------------------------------------------------------------

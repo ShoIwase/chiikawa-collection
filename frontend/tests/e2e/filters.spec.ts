@@ -37,7 +37,7 @@ test.describe("フィルター機能", () => {
   });
 
   test("エリア種別でフィルタできる", async ({ page }) => {
-    await page.getByRole("combobox").first().selectOption("温泉地");
+    await page.getByRole("combobox").first().selectOption("市区町村");
 
     await expect(page.getByText("箱根 ダイカットキーホルダー")).toBeVisible();
     await expect(page.getByText("北海道 ダイカットキーホルダー")).not.toBeVisible();
@@ -65,10 +65,19 @@ test.describe("フィルター機能", () => {
     await page.getByRole("combobox").first().selectOption("都道府県");
     await page.getByRole("combobox").nth(1).selectOption("北海道");
 
-    await page.getByRole("combobox").first().selectOption("温泉地");
+    await page.getByRole("combobox").first().selectOption("市区町村");
 
     // エリア名セレクトが空に戻っている
     await expect(page.getByRole("combobox").nth(1)).toHaveValue("");
+  });
+
+  test("キャラクターで絞り込める", async ({ page }) => {
+    // 箱根=ハチワレ のみ表示される
+    await page.getByRole("button", { name: "ハチワレ", exact: true }).click();
+
+    await expect(page.getByText("箱根 ダイカットキーホルダー")).toBeVisible();
+    await expect(page.getByText("北海道 ダイカットキーホルダー")).not.toBeVisible();
+    await expect(page.getByText("沖縄 ダイカットキーホルダー")).not.toBeVisible();
   });
 
   test("未所持のみ表示できる", async ({ page }) => {
