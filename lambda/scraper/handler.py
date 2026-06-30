@@ -10,6 +10,7 @@ from area_mapping import classify_area, predict_area, resolve_prefecture
 from scraper import (
     KEYCHAIN_KEYWORD,
     analyze_image,
+    crop_character,
     fetch_image_from_url,
     upload_image_to_s3,
 )
@@ -93,16 +94,6 @@ def lambda_handler(event: dict, context: object) -> dict:
         if not region and image_id:
             s3_base = f"{s3_base}_{image_id}"
 
-        # S3 にアップロード（同名商品の画像上書きを防ぐ）
-        image_s3_key = ""
-        if image_data:
-            try:
-                image_s3_key = upload_image_to_s3(image_data, s3_base, content_type)
-            except Exception as e:
-                logger.warning("Image upload failed for %s: %s", s3_base, e)
-
-        image_url = f"{CLOUDFRONT_IMAGES_PREFIX}{image_s3_key}" if image_s3_key else ""
-
         # エリアは画像から取れた地域を優先、無ければ商品名から推測
         if region:
             area_type, area_name = classify_area(region, area_hint)
@@ -119,6 +110,16 @@ def lambda_handler(event: dict, context: object) -> dict:
                 logger.info("Skip existing: %s", entry_name)
                 skipped += 1
                 continue
+
+            # 一覧でどのキャラか分かるよう、3キャラ並びの画像から該当キャラの列を切り出して保存
+            image_url = ""
+            if image_data:
+                try:
+                    char_image = crop_character(image_data, content_type, character)
+                    char_key = upload_image_to_s3(char_image, f"{s3_base}_{character}", content_type)
+                    image_url = f"{CLOUDFRONT_IMAGES_PREFIX}{char_key}"
+                except Exception as e:
+                    logger.warning("Image crop/upload failed for %s: %s", entry_name, e)
 
             # 自動タグ: キャラ名と地名（空は除外）。両方空なら Tags は付けない。
             tags = {t for t in (character, area_name) if t}

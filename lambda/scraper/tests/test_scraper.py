@@ -15,6 +15,7 @@ from scraper import (
     upload_image_to_s3,
     download_image_to_s3,
     analyze_image,
+    crop_character,
     _guess_motif,
 )
 
@@ -314,6 +315,50 @@ class TestAnalyzeImage:
             result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
 
         assert result == {"characters": [], "region": "", "areaType": "", "prefecture": ""}
+
+
+# ---------------------------------------------------------------------------
+# crop_character
+# ---------------------------------------------------------------------------
+
+class TestCropCharacter:
+
+    def _three_column_png(self) -> bytes:
+        """左=赤 / 中=緑 / 右=青 の 600x300 PNG を作る。"""
+        Image = pytest.importorskip("PIL.Image")
+        import io
+        im = Image.new("RGB", (600, 300), (0, 255, 0))  # 中央=緑
+        im.paste((255, 0, 0), (0, 0, 200, 300))          # 左=赤
+        im.paste((0, 0, 255), (400, 0, 600, 300))        # 右=青
+        buf = io.BytesIO(); im.save(buf, format="PNG")
+        return buf.getvalue()
+
+    def test_crops_correct_column_per_character(self):
+        Image = pytest.importorskip("PIL.Image")
+        import io
+        data = self._three_column_png()
+
+        # ちいかわ=左列(赤)
+        c0 = Image.open(io.BytesIO(crop_character(data, "image/png", "ちいかわ")))
+        assert c0.size == (200, 240)  # 幅600/3=200, 高さ300*0.8=240
+        assert c0.convert("RGB").getpixel((100, 100)) == (255, 0, 0)
+
+        # ハチワレ=中央列(緑)
+        c1 = Image.open(io.BytesIO(crop_character(data, "image/png", "ハチワレ")))
+        assert c1.convert("RGB").getpixel((100, 100)) == (0, 255, 0)
+
+        # うさぎ=右列(青)
+        c2 = Image.open(io.BytesIO(crop_character(data, "image/png", "うさぎ")))
+        assert c2.convert("RGB").getpixel((100, 100)) == (0, 0, 255)
+
+    def test_unknown_character_returns_original(self):
+        data = b"\xff\xd8\xff"
+        assert crop_character(data, "image/jpeg", "モモンガ") == data
+
+    def test_invalid_image_falls_back_to_original(self):
+        # PIL が無い環境や壊れた画像では元バイト列を返す
+        data = b"not-an-image"
+        assert crop_character(data, "image/png", "ちいかわ") == data
 
 
 # ---------------------------------------------------------------------------
