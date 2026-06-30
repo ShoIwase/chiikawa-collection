@@ -1,0 +1,117 @@
+# ちいかわコレクション 🐾
+
+「ご当地ちいかわ ダイカットキーホルダー」の所持状況を家族で管理するコレクションアプリ。
+全国のご当地キーホルダーを自動収集し、商品画像から **ちいかわ / ハチワレ / うさぎ** を判定して
+キャラクター別に登録。所持チェック・都道府県フィルタ・タグ付けができる。
+
+## 主な機能
+
+- **自動収集**：販売サイトを毎日巡回し、ダイカットキーホルダー商品を自動取り込み
+- **画像からキャラ判定**：商品画像を AI（Amazon Bedrock / Claude）で解析し、写っている
+  ちいかわ・ハチワレ・うさぎを検出。1商品＝最大3エントリに分割
+- **地域の自動判定と集約**：画像内の「○○限定」から地域を抽出。市区町村は親の都道府県へ集約され、
+  「千葉県」を選べば市川市の商品も表示される
+- **所持管理**：家族共有で所持/未所持をチェック（ログイン者によらず共有）
+- **フィルタ**：都道府県 → 市区町村 の2段フィルタ、キャラクター絞り込み、フリーワード検索、
+  自由タグ、未所持のみ表示
+- **確認フロー**：自動取り込みした商品を人が確認（verify）してから一覧に反映
+
+## 技術スタック
+
+| レイヤ | 技術 |
+|---|---|
+| フロントエンド | Next.js 15 (App Router) / React 19 / Tailwind CSS / TypeScript |
+| 認証 | Amazon Cognito（AWS Amplify） |
+| API | Java 21 Lambda（SnapStart）+ API Gateway HTTP API（Cognito JWT） |
+| スクレイパー | Python 3.12 Lambda + Amazon Bedrock（Claude Haiku）+ BeautifulSoup |
+| データ | DynamoDB / S3 / CloudFront |
+| IaC | Terraform（基盤）/ AWS SAM（Lambda・API・スケジュール） |
+| CI/CD | GitHub Actions |
+| テスト | pytest（scraper）/ Playwright（フロント e2e）/ JUnit（API） |
+
+## アーキテクチャ
+
+```
+                 ┌──────────────┐
+  毎日 9:00 JST → │  Scraper     │ 販売サイト巡回 → 画像DL → Bedrockで
+  (EventBridge)  │  (Python)    │ キャラ/地域判定 → S3保存 → DynamoDB登録
+                 └──────┬───────┘
+                        ▼
+   ┌──────────┐   ┌──────────────┐   ┌──────────────┐
+   │ Next.js  │──▶│ API Gateway   │──▶│  API (Java)   │
+   │ (Amplify)│   │ + Cognito JWT │   │  /items 等    │
+   └────┬─────┘   └──────────────┘   └──────┬───────┘
+        │                                    ▼
+        │  画像                       ┌──────────────┐
+        └───────────── CloudFront ◀── │ DynamoDB / S3 │
+                                      └──────────────┘
+```
+
+## ディレクトリ構成
+
+```
+chiikawa-collection/
+├── frontend/          # Next.js アプリ（コレクション画面・フィルタ・確認画面）
+│   ├── src/app/         # ページ（collection / verify / login）
+│   ├── src/components/  # FilterBar, ItemCard, TagEditor, VerifyModal ...
+│   ├── src/lib/         # types, api, auth
+│   └── tests/           # Playwright e2e
+├── lambda/
+│   ├── api/             # Java 21 Lambda（GET /items, status, verify, tags）
+│   └── scraper/         # Python スクレイパー（handler.py, scraper.py, area_mapping.py）
+├── terraform/         # DynamoDB / S3 / CloudFront / Cognito
+├── template.yaml      # SAM（Lambda・API Gateway・スケジュール）
+├── .github/workflows/ # deploy-sam / deploy-frontend / deploy-infra / run-scraper
+└── CLAUDE.md          # 運用ドキュメント（AWS権限・Bedrock・洗い替え手順など）
+```
+
+## データモデル（DynamoDB）
+
+**ChiikawaMaster**（商品マスタ） — PK=`Category`("KeyChain"), SK=`ItemName`
+| 属性 | 例 |
+|---|---|
+| `ItemName` | `うさぎ　静岡 みかん　ダイカットキーホルダー`（キャラ先頭・地域・末尾に品目） |
+| `Motif` | キャラ（ちいかわ / ハチワレ / うさぎ） |
+| `AreaType` / `AreaName` | `都道府県`/`静岡`、`市区町村`/`市川市`、`その他`/`香港` |
+| `Prefecture` | 所属都道府県の正式名（`静岡県`／市区町村は親県に集約） |
+| `Tags` | 自動付与（キャラ・地名）＋手動編集 |
+| `ImageUrl` / `SourceImageId` | CloudFront 画像パス / 元画像ID（増分取り込み用） |
+
+**UserCollection**（所持状況） — PK=`FamilyID`, SK=`ItemName`, `Status`(所持)
+※ FamilyID は固定（家族で1つのコレクションを共有）
+
+## ローカル開発
+
+```bash
+# フロントエンド
+cd frontend
+npm install
+npm run dev            # http://localhost:3000
+npx playwright test    # e2e テスト
+
+# スクレイパー（Python）
+cd lambda/scraper
+python3 -m pytest tests/ -q
+
+# API（Java）
+cd lambda/api
+mvn test
+```
+
+## デプロイ
+
+`main` への push で GitHub Actions が自動デプロイする。
+
+| 変更パス | ワークフロー |
+|---|---|
+| `lambda/**`, `template.yaml` | `deploy-sam.yml`（テスト → SAM deploy） |
+| `frontend/**` | `deploy-frontend.yml` |
+| `terraform/**` | `deploy-infra.yml` |
+
+スクレイパーの手動実行は GitHub Actions の **Run Scraper (Manual)** から、または
+AWS CLI で `chiikawa-scraper` Lambda を invoke する（詳細は [CLAUDE.md](./CLAUDE.md)）。
+
+## 運用
+
+AWS の権限操作・Bedrock の設定・データ洗い替え手順などの運用ノウハウは
+[CLAUDE.md](./CLAUDE.md) に集約している。
