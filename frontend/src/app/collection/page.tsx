@@ -203,7 +203,6 @@ export default function CollectionPage() {
             onToggle={handleToggleLocal}
             onZoom={(src, alt) => setZoomedImage({ src, alt })}
             onEditTags={setEditingItem}
-            onTagClick={setSelectedTag}
           />
         )}
       </div>
