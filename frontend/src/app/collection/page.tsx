@@ -21,6 +21,9 @@ export default function CollectionPage() {
 
   const [searchText, setSearchText] = useState("");
   const [selectedTag, setSelectedTag] = useState("");
+  const [selectedAreaType, setSelectedAreaType] = useState("");
+  const [selectedAreaName, setSelectedAreaName] = useState("");
+  const [selectedCharacter, setSelectedCharacter] = useState("");
   const [showOwnedOnly, setShowOwnedOnly] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
   const [editingItem, setEditingItem] = useState<CollectionItem | null>(null);
@@ -63,9 +66,18 @@ export default function CollectionPage() {
     return [...set].sort();
   }, [items]);
 
+  // エリア種別を変えたらエリア名の選択をリセットする
+  const handleAreaTypeChange = useCallback((v: string) => {
+    setSelectedAreaType(v);
+    setSelectedAreaName("");
+  }, []);
+
   const filtered = useMemo(() => {
     return items.filter((item) => {
       if (selectedTag && !item.Tags?.includes(selectedTag)) return false;
+      if (selectedAreaType && item.AreaType !== selectedAreaType) return false;
+      if (selectedAreaName && item.AreaName !== selectedAreaName) return false;
+      if (selectedCharacter && item.Motif !== selectedCharacter) return false;
       if (showOwnedOnly && item.Owned) return false;
       if (searchText) {
         const q = searchText.toLowerCase();
@@ -78,7 +90,7 @@ export default function CollectionPage() {
       }
       return true;
     });
-  }, [items, selectedTag, searchText, showOwnedOnly]);
+  }, [items, selectedTag, selectedAreaType, selectedAreaName, selectedCharacter, searchText, showOwnedOnly]);
 
   const ownedCount = items.filter((i) => i.Owned).length;
 
@@ -106,9 +118,15 @@ export default function CollectionPage() {
           items={items}
           searchText={searchText}
           selectedTag={selectedTag}
+          selectedAreaType={selectedAreaType}
+          selectedAreaName={selectedAreaName}
+          selectedCharacter={selectedCharacter}
           showOwnedOnly={showOwnedOnly}
           onSearchTextChange={setSearchText}
           onTagChange={setSelectedTag}
+          onAreaTypeChange={handleAreaTypeChange}
+          onAreaNameChange={setSelectedAreaName}
+          onCharacterChange={setSelectedCharacter}
           onShowOwnedOnlyChange={setShowOwnedOnly}
         />
 

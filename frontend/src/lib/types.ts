@@ -15,5 +15,8 @@ export type CollectionItem = MasterItem & {
   UpdatedAt?: string;
 };
 
-export const AREA_TYPES = ["都道府県", "市町村", "温泉地", "海外"] as const;
+export const AREA_TYPES = ["都道府県", "市区町村", "その他"] as const;
 export type AreaType = (typeof AREA_TYPES)[number];
+
+export const CHARACTERS = ["ちいかわ", "ハチワレ", "うさぎ"] as const;
+export type Character = (typeof CHARACTERS)[number];

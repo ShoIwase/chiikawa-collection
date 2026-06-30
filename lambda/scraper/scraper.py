@@ -156,23 +156,30 @@ def _clean_region(region: str) -> str:
     return region
 
 
-def analyze_image(image_data: bytes, content_type: str = "image/jpeg") -> dict:
-    """Bedrock Claude (Converse API) で画像を解析し、キャラクターと地域名を返す。
+_AREA_TYPES = ("都道府県", "市区町村", "その他")
 
-    戻り値: {"characters": [...], "region": "静岡"}
+
+def analyze_image(image_data: bytes, content_type: str = "image/jpeg") -> dict:
+    """Bedrock Claude (Converse API) で画像を解析し、キャラクター・地域名・エリア種別を返す。
+
+    戻り値: {"characters": [...], "region": "静岡", "areaType": "都道府県"}
       - characters: ちいかわ / ハチワレ / うさぎ のうち画像に含まれるもの
       - region: 画像内の『○○限定』等の地域名（『限定』除去済み。無ければ ""）
-    失敗時は {"characters": [], "region": ""} を返す（呼び出し元でフォールバックすること）。
+      - areaType: 都道府県 / 市区町村 / その他 のいずれか（判定不能なら ""）
+    失敗時は {"characters": [], "region": "", "areaType": ""} を返す
+    （呼び出し元でフォールバックすること）。
     """
     bedrock = boto3.client("bedrock-runtime", region_name="ap-northeast-1")
 
     prompt = (
         "この画像はちいかわのご当地ダイカットキーホルダー商品です。"
-        "次の2点をJSONオブジェクトのみで返してください。\n"
+        "次の3点をJSONオブジェクトのみで返してください。\n"
         "1. characters: 「ちいかわ」「ハチワレ」「うさぎ」のうち画像に含まれるもの（配列）\n"
         "2. region: 画像内に書かれた『○○限定』等の地域名。地名部分のみ（例: 静岡, 香港, 奈良, 鎌倉）。"
         "地域表記が無ければ空文字。\n"
-        '例: {"characters": ["ちいかわ", "ハチワレ", "うさぎ"], "region": "静岡"}'
+        "3. areaType: regionの種別。「都道府県」(47都道府県)/「市区町村」(鎌倉・箱根・横浜など市区町村)/"
+        "「その他」(香港など海外、関西・東海・山陰などの広域、リゾート、不明) のいずれか。\n"
+        '例: {"characters": ["ちいかわ", "ハチワレ", "うさぎ"], "region": "静岡", "areaType": "都道府県"}'
     )
     response = bedrock.converse(
         modelId=_BEDROCK_MODEL_ID,
@@ -190,7 +197,7 @@ def analyze_image(image_data: bytes, content_type: str = "image/jpeg") -> dict:
                 {"text": prompt},
             ],
         }],
-        inferenceConfig={"maxTokens": 150},
+        inferenceConfig={"maxTokens": 200},
     )
     text = response["output"]["message"]["content"][0]["text"].strip()
 
@@ -205,7 +212,10 @@ def analyze_image(image_data: bytes, content_type: str = "image/jpeg") -> dict:
         valid = set(CHIIKAWA_CHARACTERS)
         characters = [c for c in data.get("characters", []) if c in valid]
         region = _clean_region(data.get("region", ""))
-        return {"characters": characters, "region": region}
+        area_type = data.get("areaType", "")
+        if area_type not in _AREA_TYPES:
+            area_type = ""
+        return {"characters": characters, "region": region, "areaType": area_type}
     except (json.JSONDecodeError, TypeError, KeyError, AttributeError):
         logger.warning("analyze_image: failed to parse response: %s", text)
-        return {"characters": [], "region": ""}
+        return {"characters": [], "region": "", "areaType": ""}
