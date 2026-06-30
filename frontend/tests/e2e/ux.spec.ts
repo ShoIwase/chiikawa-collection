@@ -159,8 +159,8 @@ test.describe("視覚フィードバック", () => {
     const owned = MOCK_ITEMS.find((i) => i.Owned)!;
     const unowned = MOCK_ITEMS.find((i) => !i.Owned)!;
 
-    const ownedCard = page.getByRole("button").filter({ hasText: owned.ItemName });
-    const unownedCard = page.getByRole("button").filter({ hasText: unowned.ItemName });
+    const ownedCard = page.getByTestId(`card-${owned.ItemName}`);
+    const unownedCard = page.getByTestId(`card-${unowned.ItemName}`);
 
     await expect(ownedCard).toHaveClass(/ring-pink-400/);
     await expect(ownedCard).not.toHaveClass(/grayscale/);
@@ -168,27 +168,17 @@ test.describe("視覚フィードバック", () => {
     await expect(unownedCard).toHaveClass(/opacity-50/);
   });
 
-  test("アイテムトグル後に視覚状態が即座に切り替わる（楽観的更新）", async ({ page }) => {
+  test("タップで即座に未保存ハイライトに切り替わる", async ({ page }) => {
     await mockAuth(page);
-    await page.route("https://api.chiikawa.test/items", (route) =>
-      route.fulfill({ json: { items: MOCK_ITEMS } })
-    );
-    await page.route("https://api.chiikawa.test/items/pending", (route) =>
-      route.fulfill({ json: { items: [] } })
-    );
-    // APIレスポンスを意図的に遅らせる
-    await page.route("https://api.chiikawa.test/items/*/status", async (route) => {
-      await new Promise((r) => setTimeout(r, 2000));
-      route.fulfill({ status: 200, json: {} });
-    });
-
+    await mockApi(page, { items: MOCK_ITEMS });
     await page.goto("/collection/");
-    const unowned = MOCK_ITEMS.find((i) => !i.Owned)!;
-    const card = page.getByRole("button").filter({ hasText: unowned.ItemName });
 
-    await card.click();
-    // API完了前に即座にリング表示（楽観的更新）
-    await expect(card).toHaveClass(/ring-pink-400/, { timeout: 500 });
+    const unowned = MOCK_ITEMS.find((i) => !i.Owned)!;
+    const card = page.getByTestId(`card-${unowned.ItemName}`);
+
+    await page.getByRole("button", { name: `${unowned.ItemName} の所持をトグル` }).click();
+    // タップは即ローカル反映（未保存=琥珀リング）。保存するまでAPIには送られない
+    await expect(card).toHaveClass(/ring-amber-400/, { timeout: 500 });
   });
 
   test("アラートバナーが黄色で目立つ", async ({ page }) => {

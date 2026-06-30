@@ -5,6 +5,7 @@ import type { CollectionItem } from "@/lib/types";
 
 type Props = {
   item: CollectionItem;
+  dirty?: boolean;
   onToggle: (item: CollectionItem) => void;
   onZoom?: (imageUrl: string, alt: string) => void;
   onEditTags?: (item: CollectionItem) => void;
@@ -13,15 +14,27 @@ type Props = {
 
 const CLOUDFRONT_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL ?? "";
 
-export default function ItemCard({ item, onToggle, onZoom, onEditTags, onTagClick }: Props) {
+export default function ItemCard({ item, dirty, onToggle, onZoom, onEditTags, onTagClick }: Props) {
   const imageUrl = item.ImageUrl ? `${CLOUDFRONT_URL}${item.ImageUrl}` : "/no-image.png";
+
+  // 未保存(dirty)は琥珀色リングで強調、確定済みの所持はピンクリング
+  const ringClass = dirty
+    ? "ring-2 ring-amber-400"
+    : item.Owned
+    ? "ring-2 ring-pink-400"
+    : "";
+  const dimClass = item.Owned ? "" : "opacity-50 grayscale";
 
   return (
     <div
-      className={`relative rounded-2xl overflow-hidden shadow-sm transition-all ${
-        item.Owned ? "ring-2 ring-pink-400" : "opacity-50 grayscale"
-      }`}
+      data-testid={`card-${item.ItemName}`}
+      className={`relative rounded-2xl overflow-hidden shadow-sm transition-all ${dimClass} ${ringClass}`}
     >
+      {dirty && (
+        <div className="absolute top-1 left-1 z-10 bg-amber-400 text-white text-[10px] font-bold rounded px-1.5 py-0.5">
+          未保存
+        </div>
+      )}
       {/* 画像エリア: タップで拡大 */}
       <button
         onClick={() => onZoom?.(imageUrl, item.ItemName)}

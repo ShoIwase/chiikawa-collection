@@ -37,7 +37,7 @@ test.describe("コレクションページ", () => {
     await page.goto("/collection/");
 
     const unownedItem = MOCK_ITEMS.find((i) => !i.Owned)!;
-    const card = page.getByRole("button").filter({ hasText: unownedItem.ItemName });
+    const card = page.getByTestId(`card-${unownedItem.ItemName}`);
     await expect(card).toHaveClass(/grayscale/);
     await expect(card).toHaveClass(/opacity-50/);
   });
@@ -48,33 +48,72 @@ test.describe("コレクションページ", () => {
     await page.goto("/collection/");
 
     const ownedItem = MOCK_ITEMS.find((i) => i.Owned)!;
-    const card = page.getByRole("button").filter({ hasText: ownedItem.ItemName });
+    const card = page.getByTestId(`card-${ownedItem.ItemName}`);
     await expect(card).toHaveClass(/ring-pink-400/);
   });
 
-  test("アイテムクリックで所持状態がトグルされる", async ({ page }) => {
+  test("タップは未保存（保存するまでサーバーに送られない）", async ({ page }) => {
     await mockAuth(page);
     await mockApi(page, { items: MOCK_ITEMS });
     await page.goto("/collection/");
 
     const unownedItem = MOCK_ITEMS.find((i) => !i.Owned)!;
-    const card = page.getByRole("button").filter({ hasText: unownedItem.ItemName });
+    const toggle = page.getByRole("button", { name: `${unownedItem.ItemName} の所持をトグル` });
+    const card = page.getByTestId(`card-${unownedItem.ItemName}`);
 
-    await card.click();
-    await expect(card).toHaveClass(/ring-pink-400/);
+    await toggle.click();
+    // 未保存ハイライト（琥珀リング）と保存バーが出る
+    await expect(card).toHaveClass(/ring-amber-400/);
+    await expect(page.getByText(/未保存の変更/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "保存" })).toBeVisible();
   });
 
-  test("APIエラー時に所持状態がロールバックされる", async ({ page }) => {
+  test("保存ボタンで所持状態が確定される", async ({ page }) => {
+    await mockAuth(page);
+    await mockApi(page, { items: MOCK_ITEMS });
+    await page.goto("/collection/");
+
+    const unownedItem = MOCK_ITEMS.find((i) => !i.Owned)!;
+    const card = page.getByTestId(`card-${unownedItem.ItemName}`);
+
+    await page.getByRole("button", { name: `${unownedItem.ItemName} の所持をトグル` }).click();
+    await page.getByRole("button", { name: "保存" }).click();
+
+    // 確定後はピンクリング、保存バーは消える
+    await expect(card).toHaveClass(/ring-pink-400/);
+    await expect(page.getByText(/未保存の変更/)).not.toBeVisible();
+  });
+
+  test("取消ボタンで未保存の変更が破棄される", async ({ page }) => {
+    await mockAuth(page);
+    await mockApi(page, { items: MOCK_ITEMS });
+    await page.goto("/collection/");
+
+    const unownedItem = MOCK_ITEMS.find((i) => !i.Owned)!;
+    const card = page.getByTestId(`card-${unownedItem.ItemName}`);
+
+    await page.getByRole("button", { name: `${unownedItem.ItemName} の所持をトグル` }).click();
+    await page.getByRole("button", { name: "取消" }).click();
+
+    // 元のグレーアウトに戻り、保存バーが消える
+    await expect(card).toHaveClass(/grayscale/);
+    await expect(page.getByText(/未保存の変更/)).not.toBeVisible();
+  });
+
+  test("保存失敗時は未保存のまま残りエラーが出る", async ({ page }) => {
     await mockAuth(page);
     await mockApi(page, { items: MOCK_ITEMS, statusError: true });
     await page.goto("/collection/");
 
     const unownedItem = MOCK_ITEMS.find((i) => !i.Owned)!;
-    const card = page.getByRole("button").filter({ hasText: unownedItem.ItemName });
+    const card = page.getByTestId(`card-${unownedItem.ItemName}`);
 
-    await card.click();
-    // 楽観的更新 → ロールバック後、グレーに戻る
-    await expect(card).toHaveClass(/grayscale/);
+    await page.getByRole("button", { name: `${unownedItem.ItemName} の所持をトグル` }).click();
+    await page.getByRole("button", { name: "保存" }).click();
+
+    // 失敗 → 未保存（琥珀リング）のまま、エラー表示
+    await expect(card).toHaveClass(/ring-amber-400/);
+    await expect(page.getByText(/保存に失敗/)).toBeVisible();
   });
 
   test("未確認アイテムがある場合アラートバナーが表示される", async ({ page }) => {
