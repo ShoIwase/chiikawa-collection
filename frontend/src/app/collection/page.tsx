@@ -19,6 +19,11 @@ export default function CollectionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // 所持トグルは即時保存せず、未保存の変更を pending に溜めて保存ボタンで確定する
+  const [pending, setPending] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
   const [searchText, setSearchText] = useState("");
   const [selectedTag, setSelectedTag] = useState("");
   const [selectedPrefecture, setSelectedPrefecture] = useState("");
@@ -38,18 +43,60 @@ export default function CollectionPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleToggle = useCallback(async (item: CollectionItem) => {
-    const next = !item.Owned;
-    setItems((prev) =>
-      prev.map((i) => (i.ItemName === item.ItemName ? { ...i, Owned: next } : i))
-    );
+  const itemsByName = useMemo(() => {
+    const m = new Map<string, CollectionItem>();
+    items.forEach((i) => m.set(i.ItemName, i));
+    return m;
+  }, [items]);
+
+  // タップは未保存の変更として記録するだけ（サーバーには送らない）
+  const handleToggleLocal = useCallback((item: CollectionItem) => {
+    const name = item.ItemName;
+    const server = itemsByName.get(name)?.Owned ?? false;
+    setPending((prev) => {
+      const current = name in prev ? prev[name] : server;
+      const next = !current;
+      const np = { ...prev };
+      if (next === server) delete np[name]; // サーバー値と同じに戻したら変更を取り消し
+      else np[name] = next;
+      return np;
+    });
+  }, [itemsByName]);
+
+  const handleSave = useCallback(async () => {
+    const entries = Object.entries(pending);
+    if (entries.length === 0) return;
+    setSaving(true);
+    setSaveError("");
+    const succeeded: string[] = [];
     try {
-      await updateItemStatus(item.ItemName, next);
-    } catch {
+      for (const [name, owned] of entries) {
+        await updateItemStatus(name, owned);
+        succeeded.push(name);
+      }
       setItems((prev) =>
-        prev.map((i) => (i.ItemName === item.ItemName ? { ...i, Owned: item.Owned } : i))
+        prev.map((i) => (i.ItemName in pending ? { ...i, Owned: pending[i.ItemName] } : i))
       );
+      setPending({});
+    } catch {
+      // 成功した分だけ反映し、失敗分は未保存のまま残す
+      setItems((prev) =>
+        prev.map((i) => (succeeded.includes(i.ItemName) ? { ...i, Owned: pending[i.ItemName] } : i))
+      );
+      setPending((prev) => {
+        const np = { ...prev };
+        succeeded.forEach((n) => delete np[n]);
+        return np;
+      });
+      setSaveError("一部の保存に失敗しました。もう一度お試しください。");
+    } finally {
+      setSaving(false);
     }
+  }, [pending]);
+
+  const handleCancel = useCallback(() => {
+    setPending({});
+    setSaveError("");
   }, []);
 
   const handleSaveTags = useCallback(async (tags: string[]) => {
@@ -72,8 +119,16 @@ export default function CollectionPage() {
     setSelectedCity("");
   }, []);
 
+  // 未保存の変更を反映した表示用アイテム（Owned は実効値）
+  const displayItems = useMemo(
+    () => items.map((i) => (i.ItemName in pending ? { ...i, Owned: pending[i.ItemName] } : i)),
+    [items, pending]
+  );
+  const dirtyNames = useMemo(() => new Set(Object.keys(pending)), [pending]);
+  const dirtyCount = dirtyNames.size;
+
   const filtered = useMemo(() => {
-    return items.filter((item) => {
+    return displayItems.filter((item) => {
       if (selectedTag && !item.Tags?.includes(selectedTag)) return false;
       // 都道府県フィルタ（市区町村は親県に集約。海外・広域は「その他」）
       if (selectedPrefecture) {
@@ -95,13 +150,13 @@ export default function CollectionPage() {
       }
       return true;
     });
-  }, [items, selectedTag, selectedPrefecture, selectedCity, selectedCharacter, searchText, showOwnedOnly]);
+  }, [displayItems, selectedTag, selectedPrefecture, selectedCity, selectedCharacter, searchText, showOwnedOnly]);
 
-  const ownedCount = items.filter((i) => i.Owned).length;
+  const ownedCount = displayItems.filter((i) => i.Owned).length;
 
   return (
     <AuthGuard>
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+      <div className={`max-w-2xl mx-auto px-4 py-6 space-y-4 ${dirtyCount > 0 ? "pb-24" : ""}`}>
         <header className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-pink-500">🐾 ちいかわコレクション</h1>
@@ -144,13 +199,42 @@ export default function CollectionPage() {
         {!loading && (
           <CollectionGrid
             items={filtered}
-            onToggle={handleToggle}
+            dirtyNames={dirtyNames}
+            onToggle={handleToggleLocal}
             onZoom={(src, alt) => setZoomedImage({ src, alt })}
             onEditTags={setEditingItem}
             onTagClick={setSelectedTag}
           />
         )}
       </div>
+
+      {/* 未保存の変更を確定する保存バー */}
+      {dirtyCount > 0 && (
+        <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-pink-200 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+            <div className="text-sm text-gray-600">
+              <span className="font-medium text-pink-600">{dirtyCount}件</span> の未保存の変更
+              {saveError && <p className="text-xs text-red-500 mt-0.5">{saveError}</p>}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleCancel}
+                disabled={saving}
+                className="px-3 py-1.5 text-sm text-gray-500 rounded-lg border border-gray-300 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-1.5 text-sm font-medium text-white bg-pink-500 rounded-lg hover:bg-pink-600 disabled:opacity-50"
+              >
+                {saving ? "保存中..." : "保存"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {zoomedImage && (
         <ImageLightbox
