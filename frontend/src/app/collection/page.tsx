@@ -21,8 +21,8 @@ export default function CollectionPage() {
 
   const [searchText, setSearchText] = useState("");
   const [selectedTag, setSelectedTag] = useState("");
-  const [selectedAreaType, setSelectedAreaType] = useState("");
-  const [selectedAreaName, setSelectedAreaName] = useState("");
+  const [selectedPrefecture, setSelectedPrefecture] = useState("");
+  const [selectedCity, setSelectedCity] = useState("");
   const [selectedCharacter, setSelectedCharacter] = useState("");
   const [showOwnedOnly, setShowOwnedOnly] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
@@ -66,17 +66,21 @@ export default function CollectionPage() {
     return [...set].sort();
   }, [items]);
 
-  // エリア種別を変えたらエリア名の選択をリセットする
-  const handleAreaTypeChange = useCallback((v: string) => {
-    setSelectedAreaType(v);
-    setSelectedAreaName("");
+  // 都道府県を変えたら市区町村の選択をリセットする
+  const handlePrefectureChange = useCallback((v: string) => {
+    setSelectedPrefecture(v);
+    setSelectedCity("");
   }, []);
 
   const filtered = useMemo(() => {
     return items.filter((item) => {
       if (selectedTag && !item.Tags?.includes(selectedTag)) return false;
-      if (selectedAreaType && item.AreaType !== selectedAreaType) return false;
-      if (selectedAreaName && item.AreaName !== selectedAreaName) return false;
+      // 都道府県フィルタ（市区町村は親県に集約。海外・広域は「その他」）
+      if (selectedPrefecture) {
+        const bucket = item.Prefecture || "その他";
+        if (bucket !== selectedPrefecture) return false;
+      }
+      if (selectedCity && item.AreaName !== selectedCity) return false;
       if (selectedCharacter && item.Motif !== selectedCharacter) return false;
       if (showOwnedOnly && item.Owned) return false;
       if (searchText) {
@@ -85,12 +89,13 @@ export default function CollectionPage() {
           item.ItemName.toLowerCase().includes(q) ||
           item.Motif.toLowerCase().includes(q) ||
           item.AreaName.toLowerCase().includes(q) ||
+          (item.Prefecture ?? "").toLowerCase().includes(q) ||
           item.Tags?.some((t) => t.toLowerCase().includes(q))
         );
       }
       return true;
     });
-  }, [items, selectedTag, selectedAreaType, selectedAreaName, selectedCharacter, searchText, showOwnedOnly]);
+  }, [items, selectedTag, selectedPrefecture, selectedCity, selectedCharacter, searchText, showOwnedOnly]);
 
   const ownedCount = items.filter((i) => i.Owned).length;
 
@@ -118,14 +123,14 @@ export default function CollectionPage() {
           items={items}
           searchText={searchText}
           selectedTag={selectedTag}
-          selectedAreaType={selectedAreaType}
-          selectedAreaName={selectedAreaName}
+          selectedPrefecture={selectedPrefecture}
+          selectedCity={selectedCity}
           selectedCharacter={selectedCharacter}
           showOwnedOnly={showOwnedOnly}
           onSearchTextChange={setSearchText}
           onTagChange={setSelectedTag}
-          onAreaTypeChange={handleAreaTypeChange}
-          onAreaNameChange={setSelectedAreaName}
+          onPrefectureChange={handlePrefectureChange}
+          onCityChange={setSelectedCity}
           onCharacterChange={setSelectedCharacter}
           onShowOwnedOnlyChange={setShowOwnedOnly}
         />

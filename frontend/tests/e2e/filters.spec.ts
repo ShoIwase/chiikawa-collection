@@ -36,38 +36,39 @@ test.describe("フィルター機能", () => {
     await expect(page.getByText("箱根 ダイカットキーホルダー")).not.toBeVisible();
   });
 
-  test("エリア種別でフィルタできる", async ({ page }) => {
-    await page.getByRole("combobox").first().selectOption("市区町村");
+  test("都道府県でフィルタできる（市区町村は親県に集約される）", async ({ page }) => {
+    // 箱根は市区町村だが神奈川県を選べば出る（集約）
+    await page.getByRole("combobox").first().selectOption("神奈川県");
 
     await expect(page.getByText("箱根 ダイカットキーホルダー")).toBeVisible();
     await expect(page.getByText("北海道 ダイカットキーホルダー")).not.toBeVisible();
     await expect(page.getByText("沖縄 ダイカットキーホルダー")).not.toBeVisible();
   });
 
-  test("エリア種別選択後にエリア名でフィルタできる（カスケード）", async ({ page }) => {
-    await page.getByRole("combobox").first().selectOption("都道府県");
+  test("都道府県選択後に市区町村でさらに絞れる（カスケード）", async ({ page }) => {
+    await page.getByRole("combobox").first().selectOption("神奈川県");
 
-    const areaNameSelect = page.getByRole("combobox").nth(1);
-    await expect(areaNameSelect).not.toBeDisabled();
+    const citySelect = page.getByRole("combobox").nth(1);
+    await expect(citySelect).not.toBeDisabled();
 
-    await areaNameSelect.selectOption("北海道");
-    await expect(page.getByText("北海道 ダイカットキーホルダー")).toBeVisible();
+    await citySelect.selectOption("箱根");
+    await expect(page.getByText("箱根 ダイカットキーホルダー")).toBeVisible();
+    await expect(page.getByText("北海道 ダイカットキーホルダー")).not.toBeVisible();
     await expect(page.getByText("沖縄 ダイカットキーホルダー")).not.toBeVisible();
-    await expect(page.getByText("箱根 ダイカットキーホルダー")).not.toBeVisible();
   });
 
-  test("エリア種別未選択時はエリア名セレクトが無効", async ({ page }) => {
-    const areaNameSelect = page.getByRole("combobox").nth(1);
-    await expect(areaNameSelect).toBeDisabled();
+  test("都道府県未選択時は市区町村セレクトが無効", async ({ page }) => {
+    const citySelect = page.getByRole("combobox").nth(1);
+    await expect(citySelect).toBeDisabled();
   });
 
-  test("エリア種別変更でエリア名がリセットされる", async ({ page }) => {
-    await page.getByRole("combobox").first().selectOption("都道府県");
-    await page.getByRole("combobox").nth(1).selectOption("北海道");
+  test("都道府県変更で市区町村がリセットされる", async ({ page }) => {
+    await page.getByRole("combobox").first().selectOption("神奈川県");
+    await page.getByRole("combobox").nth(1).selectOption("箱根");
 
-    await page.getByRole("combobox").first().selectOption("市区町村");
+    await page.getByRole("combobox").first().selectOption("北海道");
 
-    // エリア名セレクトが空に戻っている
+    // 市区町村セレクトが空に戻っている
     await expect(page.getByRole("combobox").nth(1)).toHaveValue("");
   });
 

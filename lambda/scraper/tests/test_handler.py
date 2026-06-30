@@ -45,22 +45,25 @@ def _make_table(dynamodb):
     )
 
 
-def _converse_payload(characters: list[str], region: str = "", area_type: str = "") -> dict:
+def _converse_payload(characters: list[str], region: str = "", area_type: str = "",
+                      prefecture: str = "") -> dict:
     return {
         "output": {"message": {"content": [{
             "text": json.dumps({
                 "characters": characters,
                 "region": region,
                 "areaType": area_type,
+                "prefecture": prefecture,
             })
         }]}}
     }
 
 
-def _make_bedrock_client(characters: list[str], region: str = "", area_type: str = ""):
-    """指定キャラクター・地域・エリア種別を返す Bedrock クライアントのモックを作成する。"""
+def _make_bedrock_client(characters: list[str], region: str = "", area_type: str = "",
+                         prefecture: str = ""):
+    """指定キャラクター・地域・エリア種別・都道府県を返す Bedrock クライアントのモックを作成する。"""
     mock_bedrock = MagicMock()
-    mock_bedrock.converse.return_value = _converse_payload(characters, region, area_type)
+    mock_bedrock.converse.return_value = _converse_payload(characters, region, area_type, prefecture)
     return mock_bedrock
 
 
@@ -125,6 +128,7 @@ class TestHandlerCharacterSplitting:
             assert item["Motif"] == character
             assert item["AreaType"] == "都道府県"
             assert item["AreaName"] == "北海道"
+            assert item["Prefecture"] == "北海道"
             assert item["ImageUrl"].startswith("/images/")
             assert item["SourceImageId"] == "5000"
 
@@ -331,6 +335,51 @@ class TestHandlerAreaOther:
         assert item is not None
         assert item["AreaType"] == "その他"
         assert item["AreaName"] == "関西"
+
+
+class TestHandlerPrefecture:
+
+    @mock_aws
+    @resp_mock.activate
+    def test_city_rolls_up_to_parent_prefecture(self):
+        """市区町村（市川市）は親の都道府県（千葉県）が Prefecture に入る。"""
+        dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
+        table = _make_table(dynamodb)
+
+        s3 = boto3.client("s3", region_name="ap-northeast-1")
+        s3.create_bucket(
+            Bucket=IMAGES_BUCKET,
+            CreateBucketConfiguration={"LocationConstraint": "ap-northeast-1"},
+        )
+
+        html = """
+<html><body>
+<div class="item">
+  <a class="lightbox" href="/images/tphoto_8000_b.png" title="みこし ダイカットキーホルダー">
+    <img src="/images/tphoto_8000_b.png" alt="みこし ダイカットキーホルダー"/>
+  </a>
+</div>
+</body></html>
+""".encode("shift_jis")
+        _add_target(html)
+        _add_image("https://www.jp-api.com/images/tphoto_8000_b.png")
+
+        # モデルは prefecture を返さず、CITY_TO_PREF ルックアップで解決させる
+        mock_bedrock = _make_bedrock_client(["ちいかわ"], region="市川市", area_type="市区町村")
+
+        with patch.dict(os.environ, _env()):
+            with patch("scraper.boto3") as mock_scraper_boto3:
+                mock_scraper_boto3.client.return_value = mock_bedrock
+                from handler import lambda_handler
+                lambda_handler({}, MagicMock())
+
+        item = table.get_item(
+            Key={"Category": "KeyChain", "ItemName": "ちいかわ　市川市 みこし　ダイカットキーホルダー"}
+        ).get("Item")
+        assert item is not None
+        assert item["AreaType"] == "市区町村"
+        assert item["AreaName"] == "市川市"
+        assert item["Prefecture"] == "千葉県"
 
 
 class TestHandlerIncrementalSkip:

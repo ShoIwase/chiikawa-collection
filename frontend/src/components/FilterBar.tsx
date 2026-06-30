@@ -2,36 +2,41 @@
 
 import { useMemo } from "react";
 import type { CollectionItem } from "@/lib/types";
-import { AREA_TYPES, CHARACTERS } from "@/lib/types";
+import { CHARACTERS, PREFECTURES, OTHER_AREA_LABEL } from "@/lib/types";
 
 type Props = {
   items: CollectionItem[];
   searchText: string;
   selectedTag: string;
-  selectedAreaType: string;
-  selectedAreaName: string;
+  selectedPrefecture: string;
+  selectedCity: string;
   selectedCharacter: string;
   showOwnedOnly: boolean;
   onSearchTextChange: (v: string) => void;
   onTagChange: (v: string) => void;
-  onAreaTypeChange: (v: string) => void;
-  onAreaNameChange: (v: string) => void;
+  onPrefectureChange: (v: string) => void;
+  onCityChange: (v: string) => void;
   onCharacterChange: (v: string) => void;
   onShowOwnedOnlyChange: (v: boolean) => void;
 };
+
+// 商品の所属エリア括り（都道府県、無ければ「その他」）
+function bucketOf(item: CollectionItem): string {
+  return item.Prefecture || OTHER_AREA_LABEL;
+}
 
 export default function FilterBar({
   items,
   searchText,
   selectedTag,
-  selectedAreaType,
-  selectedAreaName,
+  selectedPrefecture,
+  selectedCity,
   selectedCharacter,
   showOwnedOnly,
   onSearchTextChange,
   onTagChange,
-  onAreaTypeChange,
-  onAreaNameChange,
+  onPrefectureChange,
+  onCityChange,
   onCharacterChange,
   onShowOwnedOnlyChange,
 }: Props) {
@@ -41,26 +46,32 @@ export default function FilterBar({
     return [...set].sort();
   }, [items]);
 
-  // エリア種別ごとのエリア名リスト（カスケード用）
-  const areaNamesByType = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    items.forEach((i) => {
-      if (!i.AreaType || !i.AreaName) return;
-      if (!map.has(i.AreaType)) map.set(i.AreaType, new Set());
-      map.get(i.AreaType)!.add(i.AreaName);
-    });
-    return map;
+  // データに存在する都道府県を地理順に。属さないものは末尾に「その他」。
+  const prefsPresent = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((i) => set.add(bucketOf(i)));
+    const ordered: string[] = PREFECTURES.filter((p) => set.has(p));
+    if (set.has(OTHER_AREA_LABEL)) ordered.push(OTHER_AREA_LABEL);
+    return ordered;
   }, [items]);
 
-  const areaNames = selectedAreaType
-    ? [...(areaNamesByType.get(selectedAreaType) ?? [])].sort()
-    : [];
+  // 選択中の都道府県に含まれる市区町村（県全体の都道府県エントリは除外）
+  const citiesInPref = useMemo(() => {
+    if (!selectedPrefecture) return [];
+    const set = new Set<string>();
+    items.forEach((i) => {
+      if (bucketOf(i) !== selectedPrefecture) return;
+      if (i.AreaType === "都道府県") return; // 県全体エントリは市レベルに出さない
+      if (i.AreaName) set.add(i.AreaName);
+    });
+    return [...set].sort();
+  }, [items, selectedPrefecture]);
 
   const hasFilter =
     searchText ||
     selectedTag ||
-    selectedAreaType ||
-    selectedAreaName ||
+    selectedPrefecture ||
+    selectedCity ||
     selectedCharacter ||
     showOwnedOnly;
 
@@ -74,29 +85,29 @@ export default function FilterBar({
         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
       />
       <div className="flex gap-2 flex-wrap items-center">
-        {/* エリア種別 → エリア名（カスケード） */}
+        {/* 都道府県 → 市区町村（カスケード。県だけでもOK、市は任意） */}
         <select
-          value={selectedAreaType}
-          aria-label="エリア種別で絞り込み"
-          onChange={(e) => onAreaTypeChange(e.target.value)}
+          value={selectedPrefecture}
+          aria-label="都道府県で絞り込み"
+          onChange={(e) => onPrefectureChange(e.target.value)}
           className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-300"
         >
-          <option value="">エリア種別</option>
-          {AREA_TYPES.map((t) => (
-            <option key={t} value={t}>{t}</option>
+          <option value="">都道府県</option>
+          {prefsPresent.map((p) => (
+            <option key={p} value={p}>{p}</option>
           ))}
         </select>
 
         <select
-          value={selectedAreaName}
-          aria-label="エリア名で絞り込み"
-          disabled={!selectedAreaType}
-          onChange={(e) => onAreaNameChange(e.target.value)}
+          value={selectedCity}
+          aria-label="市区町村で絞り込み"
+          disabled={!selectedPrefecture || citiesInPref.length === 0}
+          onChange={(e) => onCityChange(e.target.value)}
           className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-300 disabled:bg-gray-100 disabled:text-gray-400"
         >
-          <option value="">エリア名</option>
-          {areaNames.map((n) => (
-            <option key={n} value={n}>{n}</option>
+          <option value="">市区町村</option>
+          {citiesInPref.map((c) => (
+            <option key={c} value={c}>{c}</option>
           ))}
         </select>
 
@@ -127,8 +138,8 @@ export default function FilterBar({
             onClick={() => {
               onSearchTextChange("");
               onTagChange("");
-              onAreaTypeChange("");
-              onAreaNameChange("");
+              onPrefectureChange("");
+              onCityChange("");
               onCharacterChange("");
               onShowOwnedOnlyChange(false);
             }}

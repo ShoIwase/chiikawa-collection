@@ -191,9 +191,15 @@ class TestImageFunctions:
 # analyze_image
 # ---------------------------------------------------------------------------
 
-def _bedrock_response(characters: list[str], region: str = "", area_type: str = "") -> dict:
-    """Bedrock converse のレスポンス形式（characters + region + areaType）をシミュレートする。"""
-    payload = {"characters": characters, "region": region, "areaType": area_type}
+def _bedrock_response(characters: list[str], region: str = "", area_type: str = "",
+                      prefecture: str = "") -> dict:
+    """Bedrock converse のレスポンス形式（characters + region + areaType + prefecture）をシミュレートする。"""
+    payload = {
+        "characters": characters,
+        "region": region,
+        "areaType": area_type,
+        "prefecture": prefecture,
+    }
     return {
         "output": {
             "message": {
@@ -227,19 +233,20 @@ class TestAnalyzeImage:
 
         assert result["characters"] == ["ハチワレ"]
 
-    def test_extracts_region_and_area_type(self):
-        """画像から地域名とエリア種別を抽出する。"""
+    def test_extracts_region_area_type_prefecture(self):
+        """画像から地域名・エリア種別・所属都道府県を抽出する。"""
         mock_bedrock = MagicMock()
         mock_bedrock.converse.return_value = _bedrock_response(
-            ["ちいかわ", "ハチワレ", "うさぎ"], region="静岡", area_type="都道府県"
+            ["ちいかわ"], region="市川市", area_type="市区町村", prefecture="千葉県"
         )
 
         with patch("scraper.boto3") as mock_boto3:
             mock_boto3.client.return_value = mock_bedrock
             result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
 
-        assert result["region"] == "静岡"
-        assert result["areaType"] == "都道府県"
+        assert result["region"] == "市川市"
+        assert result["areaType"] == "市区町村"
+        assert result["prefecture"] == "千葉県"
 
     def test_invalid_area_type_normalized_to_empty(self):
         """3値以外の areaType は空文字に正規化される。"""
@@ -306,7 +313,7 @@ class TestAnalyzeImage:
             mock_boto3.client.return_value = mock_bedrock
             result = analyze_image(b"\xff\xd8\xff", "image/jpeg")
 
-        assert result == {"characters": [], "region": "", "areaType": ""}
+        assert result == {"characters": [], "region": "", "areaType": "", "prefecture": ""}
 
 
 # ---------------------------------------------------------------------------

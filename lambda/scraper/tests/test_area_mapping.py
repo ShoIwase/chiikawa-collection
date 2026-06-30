@@ -3,7 +3,10 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
-from area_mapping import predict_area, classify_area, PREFECTURES, HOT_SPRINGS, OVERSEAS
+from area_mapping import (
+    predict_area, classify_area, normalize_prefecture, resolve_prefecture,
+    PREFECTURES, HOT_SPRINGS, OVERSEAS,
+)
 
 
 class TestPrefectures:
@@ -135,3 +138,41 @@ class TestClassifyArea:
     def test_no_hint_defaults_other(self):
         # 県外・海外外でヒント無し → その他
         assert classify_area("どこか", "") == ("その他", "どこか")
+
+
+class TestNormalizePrefecture:
+
+    def test_short_to_full(self):
+        assert normalize_prefecture("千葉") == "千葉県"
+        assert normalize_prefecture("東京") == "東京都"
+        assert normalize_prefecture("大阪") == "大阪府"
+        assert normalize_prefecture("京都") == "京都府"
+        assert normalize_prefecture("北海道") == "北海道"
+
+    def test_already_full(self):
+        assert normalize_prefecture("静岡県") == "静岡県"
+
+    def test_non_prefecture(self):
+        assert normalize_prefecture("市川市") == ""
+        assert normalize_prefecture("") == ""
+
+
+class TestResolvePrefecture:
+
+    def test_bedrock_prefecture_priority(self):
+        # モデルが県を返したら優先（短縮でも正規化）
+        assert resolve_prefecture("市川市", "千葉") == "千葉県"
+
+    def test_area_name_is_prefecture(self):
+        assert resolve_prefecture("静岡", "") == "静岡県"
+
+    def test_city_lookup(self):
+        # 市区町村→親県（ユーザー指摘の市川市→千葉県）
+        assert resolve_prefecture("市川市", "") == "千葉県"
+        assert resolve_prefecture("鎌倉", "") == "神奈川県"
+        assert resolve_prefecture("清水", "") == "静岡県"
+
+    def test_overseas_or_unknown_empty(self):
+        assert resolve_prefecture("香港", "") == ""
+        assert resolve_prefecture("関西", "") == ""
+        assert resolve_prefecture("スキー", "") == ""
