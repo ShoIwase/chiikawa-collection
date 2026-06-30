@@ -29,7 +29,8 @@
 
 ## データモデル: DynamoDB `ChiikawaMaster`
 - PK=`Category`("KeyChain")、SK=`ItemName`。
-- 属性: `Motif`(キャラ), `AreaType`, `AreaName`, `ImageUrl`(/images/xxx), `IsVerified`, `CreatedAt`,
+- 属性: `Motif`(キャラ), `AreaType`, `AreaName`, `Prefecture`(所属都道府県の正式名・正規化済み),
+  `ImageUrl`(/images/xxx), `IsVerified`, `CreatedAt`,
   `Tags`(String Set・自動付与＋手動編集), `SourceImageId`(元画像の数値ID・増分スキップ用)。
 - `UserCollection`: PK=`FamilyID`("shoiwase"), SK=`ItemName`, `Status`(所持), `UpdatedAt`。
 
@@ -38,9 +39,13 @@
 - 例: `ちいかわ　北海道　ダイカットキーホルダー` / `うさぎ　静岡 みかん　ダイカットキーホルダー`
 - 地域がモチーフと重複する場合は重複させない（北海道など）。
 
-### AreaType 3分類
+### AreaType 3分類 と 都道府県集約
 `都道府県` / `市区町村`（鎌倉・箱根など） / `その他`（海外・関西/東海などの広域・リゾート・不明）。
 画像から取れた地域は `area_mapping.classify_area()`、取れない時は `predict_area()` で分類。
+- 各商品は所属 `Prefecture`（正式名・例「千葉県」）を持つ。市区町村は親県に集約され、
+  フィルタで「千葉県」を選ぶと市川市の商品も出る。海外・広域は Prefecture 空＝「その他」。
+- 解決ロジックは `area_mapping.resolve_prefecture()`（モデルのprefecture → AreaNameが県 →
+  `CITY_TO_PREF` ルックアップ の順）。フロントのエリアフィルタは 都道府県→市区町村 の2段。
 
 ## スクレイパーの挙動（lambda/scraper）
 - 対象: `https://www.jp-api.com/contents/NOD62/`（ご当地ちいかわ）。Shift-JIS。6ページ巡回。
