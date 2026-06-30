@@ -150,19 +150,22 @@ def download_image_to_s3(image_url: str, item_name: str) -> str:
 
 
 # 商品画像はちいかわ(左)/ハチワレ(中)/うさぎ(右)の3キャラが横並び。
-# 列インデックスでキャラの部分だけを切り出す。
-_CHAR_COLUMN = {"ちいかわ": 0, "ハチワレ": 1, "うさぎ": 2}
-_CROP_BOTTOM_RATIO = 0.80  # 下のキャプション帯を除く
+# 各キャラのチャーム（柄）の中心は等分(0.167/0.5/0.833)ではなく中央寄りに位置する
+# （実測: 0.20 / 0.50 / 0.79 W）。柄を中心にした正方形で切り出す。
+_CHAR_X_CENTER = {"ちいかわ": 0.20, "ハチワレ": 0.50, "うさぎ": 0.79}
+_CROP_Y_CENTER = 0.55   # 柄の縦中心（鎖を上に、キャプションを下に外す）
+_CROP_SIDE_RATIO = 0.40  # 正方形の一辺（画像幅に対する比）
 
 
 def crop_character(image_data: bytes, content_type: str, character: str) -> bytes:
-    """3キャラ横並び画像から、指定キャラの列だけを切り出して返す。
+    """3キャラ横並び画像から、指定キャラの柄を中心にした正方形を切り出して返す。
 
     一覧でどのキャラのエントリか一目で分かるようにするための加工。
+    正方形なのでカードの正方形サムネに柄がきれいに収まる。
     対象外キャラや失敗時は元画像をそのまま返す（フォールバック）。
     """
-    col = _CHAR_COLUMN.get(character)
-    if col is None:
+    cx_ratio = _CHAR_X_CENTER.get(character)
+    if cx_ratio is None:
         return image_data
     try:
         import io
@@ -170,10 +173,12 @@ def crop_character(image_data: bytes, content_type: str, character: str) -> byte
 
         im = Image.open(io.BytesIO(image_data))
         width, height = im.size
-        bottom = int(height * _CROP_BOTTOM_RATIO)
-        left = width * col // 3
-        right = width * (col + 1) // 3
-        crop = im.crop((left, 0, right, bottom))
+        side = min(int(width * _CROP_SIDE_RATIO), height)
+        cx = int(width * cx_ratio)
+        cy = int(height * _CROP_Y_CENTER)
+        left = max(0, min(width - side, cx - side // 2))
+        top = max(0, min(height - side, cy - side // 2))
+        crop = im.crop((left, top, left + side, top + side))
 
         fmt = im.format
         if not fmt:

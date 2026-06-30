@@ -323,33 +323,28 @@ class TestAnalyzeImage:
 
 class TestCropCharacter:
 
-    def _three_column_png(self) -> bytes:
-        """左=赤 / 中=緑 / 右=青 の 600x300 PNG を作る。"""
+    def _three_charm_png(self) -> bytes:
+        """実際の柄中心(0.20/0.50/0.79 W, 0.55 H)に色付き四角を置いた 700x600 PNG。"""
         Image = pytest.importorskip("PIL.Image")
         import io
-        im = Image.new("RGB", (600, 300), (0, 255, 0))  # 中央=緑
-        im.paste((255, 0, 0), (0, 0, 200, 300))          # 左=赤
-        im.paste((0, 0, 255), (400, 0, 600, 300))        # 右=青
+        im = Image.new("RGB", (700, 600), (255, 255, 255))  # 白背景
+        cy = int(600 * 0.55)
+        for cx_ratio, color in [(0.20, (255, 0, 0)), (0.50, (0, 255, 0)), (0.79, (0, 0, 255))]:
+            cx = int(700 * cx_ratio)
+            im.paste(color, (cx - 60, cy - 60, cx + 60, cy + 60))  # 120x120 の柄
         buf = io.BytesIO(); im.save(buf, format="PNG")
         return buf.getvalue()
 
-    def test_crops_correct_column_per_character(self):
+    def test_crops_square_centered_on_charm(self):
         Image = pytest.importorskip("PIL.Image")
         import io
-        data = self._three_column_png()
-
-        # ちいかわ=左列(赤)
-        c0 = Image.open(io.BytesIO(crop_character(data, "image/png", "ちいかわ")))
-        assert c0.size == (200, 240)  # 幅600/3=200, 高さ300*0.8=240
-        assert c0.convert("RGB").getpixel((100, 100)) == (255, 0, 0)
-
-        # ハチワレ=中央列(緑)
-        c1 = Image.open(io.BytesIO(crop_character(data, "image/png", "ハチワレ")))
-        assert c1.convert("RGB").getpixel((100, 100)) == (0, 255, 0)
-
-        # うさぎ=右列(青)
-        c2 = Image.open(io.BytesIO(crop_character(data, "image/png", "うさぎ")))
-        assert c2.convert("RGB").getpixel((100, 100)) == (0, 0, 255)
+        data = self._three_charm_png()
+        side = int(700 * 0.40)  # 280
+        # 各キャラの柄中心が切り抜きの中心(=側長/2)に来て、その色になる
+        for character, color in [("ちいかわ", (255, 0, 0)), ("ハチワレ", (0, 255, 0)), ("うさぎ", (0, 0, 255))]:
+            crop = Image.open(io.BytesIO(crop_character(data, "image/png", character))).convert("RGB")
+            assert crop.size == (side, side)  # 正方形
+            assert crop.getpixel((side // 2, side // 2)) == color
 
     def test_unknown_character_returns_original(self):
         data = b"\xff\xd8\xff"
