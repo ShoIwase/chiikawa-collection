@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import boto3
 from boto3.dynamodb.conditions import Key
 
-from area_mapping import classify_area, predict_area
+from area_mapping import classify_area, predict_area, resolve_prefecture
 from scraper import (
     KEYCHAIN_KEYWORD,
     analyze_image,
@@ -68,12 +68,14 @@ def lambda_handler(event: dict, context: object) -> dict:
         characters: list[str] = []
         region = ""
         area_hint = ""
+        bedrock_pref = ""
         if image_data:
             try:
                 analysis = analyze_image(image_data, content_type)
                 characters = analysis["characters"]
                 region = analysis["region"]
                 area_hint = analysis["areaType"]
+                bedrock_pref = analysis.get("prefecture", "")
             except Exception as e:
                 logger.warning("Image analysis failed for %s: %s", item.item_name, e)
 
@@ -107,6 +109,9 @@ def lambda_handler(event: dict, context: object) -> dict:
         else:
             area_type, area_name = predict_area(item.item_name)
 
+        # 所属都道府県（市区町村は親県に集約。海外・広域は空=その他）
+        prefecture = resolve_prefecture(area_name, bedrock_pref)
+
         for character in characters:
             entry_name = _make_entry_name(character, core)
 
@@ -124,6 +129,7 @@ def lambda_handler(event: dict, context: object) -> dict:
                 "Motif": character,
                 "AreaType": area_type,
                 "AreaName": area_name,
+                "Prefecture": prefecture,
                 "ImageUrl": image_url,
                 "IsVerified": False,
                 "CreatedAt": datetime.now(timezone.utc).isoformat(),

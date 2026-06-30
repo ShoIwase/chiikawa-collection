@@ -34,6 +34,78 @@ _SUFFIXES = re.compile(
 )
 
 
+def _full_pref(short: str) -> str:
+    """都道府県の短縮名を正式名に変換する（千葉→千葉県、東京→東京都 など）。"""
+    if short == "北海道":
+        return "北海道"
+    if short == "東京":
+        return "東京都"
+    if short in ("大阪", "京都"):
+        return short + "府"
+    return short + "県"
+
+
+# 正式名（千葉県 等）の一覧。フロントのドロップダウン順序にも使う。
+PREFECTURES_FULL: list[str] = [_full_pref(p) for p in PREFECTURES]
+
+# 市区町村・観光地名 → 親の都道府県（正式名）。画像から県が取れない時のフォールバック。
+CITY_TO_PREF: dict[str, str] = {
+    # 北海道
+    "函館": "北海道", "札幌": "北海道", "小樽": "北海道", "富良野": "北海道", "十勝": "北海道",
+    # 東北・関東
+    "日光": "栃木県", "足利": "栃木県", "那須": "栃木県",
+    "草津": "群馬県", "鬼怒川": "栃木県",
+    "市川市": "千葉県", "市川": "千葉県", "行徳": "千葉県",
+    "横浜": "神奈川県", "箱根": "神奈川県", "鎌倉": "神奈川県",
+    # 中部
+    "清水": "静岡県", "熱海": "静岡県", "伊東": "静岡県", "修善寺": "静岡県",
+    "飛騨": "岐阜県", "下呂": "岐阜県",
+    "信州": "長野県", "野沢": "長野県",
+    "名古屋": "愛知県",
+    # 近畿
+    "京都": "京都府", "金閣寺": "京都府",
+    "神戸": "兵庫県", "姫路": "兵庫県", "淡路": "兵庫県", "有馬": "兵庫県", "城崎": "兵庫県",
+    "白浜": "和歌山県",
+    # 中国・四国
+    "宮島": "広島県", "尾道": "広島県",
+    "鳴門": "徳島県", "道後": "愛媛県",
+    # 九州・沖縄
+    "北九州": "福岡県", "別府": "大分県", "湯布院": "大分県", "由布院": "大分県",
+    "嬉野": "佐賀県", "雲仙": "長崎県", "阿蘇": "熊本県", "黒川": "熊本県", "指宿": "鹿児島県",
+    "奄美": "鹿児島県",
+}
+
+
+def normalize_prefecture(name: str) -> str:
+    """任意の地名文字列を都道府県の正式名に正規化する。県でなければ空文字。"""
+    name = (name or "").strip()
+    if not name:
+        return ""
+    if name in PREFECTURES_FULL:
+        return name
+    if name in PREFECTURES:
+        return _full_pref(name)
+    # "千葉県市川市" のように県名を含む場合
+    for p in PREFECTURES:
+        if p in name:
+            return _full_pref(p)
+    return ""
+
+
+def resolve_prefecture(area_name: str, bedrock_prefecture: str = "") -> str:
+    """商品の所属都道府県（正式名）を決める。判定できなければ空文字（=その他扱い）。
+
+    優先順位: 1) 画像/モデルが返した県名 2) AreaName 自体が県 3) 市区町村→親県ルックアップ
+    """
+    pref = normalize_prefecture(bedrock_prefecture)
+    if pref:
+        return pref
+    pref = normalize_prefecture(area_name)
+    if pref:
+        return pref
+    return CITY_TO_PREF.get((area_name or "").strip(), "")
+
+
 AREA_TYPES = ("都道府県", "市区町村", "その他")
 
 

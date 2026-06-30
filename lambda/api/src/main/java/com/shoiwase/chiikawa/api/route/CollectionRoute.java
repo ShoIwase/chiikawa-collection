@@ -48,6 +48,7 @@ public class CollectionRoute {
             item.put("Motif",      Db.str(m, "Motif"));
             item.put("AreaType",   Db.str(m, "AreaType"));
             item.put("AreaName",   Db.str(m, "AreaName"));
+            item.put("Prefecture", Db.str(m, "Prefecture"));
             item.put("ImageUrl",   Db.str(m, "ImageUrl"));
             item.put("CreatedAt",  Db.str(m, "CreatedAt"));
             item.put("Tags",       Db.tags(m));
