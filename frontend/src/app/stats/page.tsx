@@ -12,18 +12,17 @@ function pct(owned: number, total: number) {
   return Math.round((owned / total) * 100);
 }
 
-function ProgressBar({ owned, total }: { owned: number; total: number }) {
+function ProgressBar({ owned, total, color = "pink" }: { owned: number; total: number; color?: "pink" | "green" | "gray" }) {
   const p = pct(owned, total);
+  const barColor = color === "green" ? "bg-emerald-400" : color === "gray" ? "bg-gray-300" : "bg-pink-400";
   return (
-    <div className="flex items-center gap-2 min-w-0">
-      <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-        <div
-          className="h-full bg-pink-400 rounded-full transition-all"
-          style={{ width: `${p}%` }}
-        />
+    <div className="flex items-center gap-2.5 min-w-0">
+      <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+        <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${p}%` }} />
       </div>
-      <span className="text-xs text-gray-500 whitespace-nowrap w-20 text-right">
-        {owned}/{total} ({p}%)
+      <span className="text-xs text-gray-500 whitespace-nowrap tabular-nums w-24 text-right">
+        {owned}/{total}
+        <span className="ml-1 font-semibold text-gray-700">({p}%)</span>
       </span>
     </div>
   );
@@ -44,14 +43,12 @@ export default function StatsPage() {
   const totalOwned = useMemo(() => items.filter((i) => i.Owned).length, [items]);
   const total = items.length;
 
-  // キャラ別
   const charStats = useMemo(() =>
     CHARACTERS.map((c) => {
       const sub = items.filter((i) => i.Motif === c);
       return { char: c, owned: sub.filter((i) => i.Owned).length, total: sub.length };
     }), [items]);
 
-  // 都道府県別（PREFECTURES 順 + その他）
   const prefStats = useMemo(() => {
     const map = new Map<string, { owned: number; total: number }>();
     items.forEach((i) => {
@@ -61,7 +58,6 @@ export default function StatsPage() {
       if (i.Owned) s.owned++;
       map.set(key, s);
     });
-
     const ordered: { pref: string; owned: number; total: number }[] = [];
     PREFECTURES.forEach((p) => {
       const s = map.get(p);
@@ -72,11 +68,13 @@ export default function StatsPage() {
     return ordered;
   }, [items]);
 
+  const totalP = pct(totalOwned, total);
+
   return (
     <AuthGuard>
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
         <header className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-pink-500">集計</h1>
+          <h1 className="text-xl font-bold text-pink-500">🐾 集計</h1>
           <Link href="/collection/" className="text-xs text-gray-400 underline">
             コレクションに戻る
           </Link>
@@ -92,44 +90,63 @@ export default function StatsPage() {
         {!loading && (
           <>
             {/* 全体 */}
-            <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">全体</h2>
-              <div className="flex items-end gap-3">
-                <span className="text-4xl font-bold text-pink-500">{totalOwned}</span>
-                <span className="text-gray-400 text-lg mb-1">/ {total}</span>
-                <span className="text-gray-400 text-sm mb-1.5">個</span>
-                <span className="ml-auto text-2xl font-bold text-gray-700">{pct(totalOwned, total)}%</span>
+            <section className="bg-gradient-to-br from-pink-400 to-pink-500 rounded-2xl p-6 text-white shadow-md">
+              <p className="text-sm font-medium opacity-80 mb-3">全体</p>
+              <div className="flex items-end justify-between mb-4">
+                <div>
+                  <span className="text-6xl font-extrabold leading-none">{totalOwned}</span>
+                  <span className="text-2xl font-medium opacity-70 ml-2">/ {total}</span>
+                </div>
+                <span className="text-5xl font-extrabold opacity-90">{totalP}%</span>
               </div>
-              <ProgressBar owned={totalOwned} total={total} />
+              <div className="bg-white/25 rounded-full h-4 overflow-hidden">
+                <div
+                  className="h-full bg-white rounded-full transition-all"
+                  style={{ width: `${totalP}%` }}
+                />
+              </div>
             </section>
 
             {/* キャラ別 */}
-            <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">キャラ別</h2>
-              <div className="space-y-3">
-                {charStats.map(({ char, owned, total: t }) => (
-                  <div key={char} className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-700">{char}</span>
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-base font-bold text-gray-700 mb-4">キャラ別</h2>
+              <div className="space-y-4">
+                {charStats.map(({ char, owned, total: t }) => {
+                  const p = pct(owned, t);
+                  return (
+                    <div key={char}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-sm font-semibold text-gray-700">{char}</span>
+                        <span className="text-sm font-bold text-pink-500">{p}%</span>
+                      </div>
+                      <ProgressBar owned={owned} total={t} />
                     </div>
-                    <ProgressBar owned={owned} total={t} />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
 
-            {/* 都道府県別 */}
-            <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">エリア別</h2>
+            {/* エリア別 */}
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-base font-bold text-gray-700 mb-4">エリア別</h2>
               <div className="space-y-3">
-                {prefStats.map(({ pref, owned, total: t }) => (
-                  <div key={pref} className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-700">{pref}</span>
+                {prefStats.map(({ pref, owned, total: t }) => {
+                  const p = pct(owned, t);
+                  const color = p === 100 ? "green" : p === 0 ? "gray" : "pink";
+                  return (
+                    <div key={pref}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-sm font-medium ${p === 100 ? "text-emerald-600" : "text-gray-700"}`}>
+                          {p === 100 && <span className="mr-1">✓</span>}{pref}
+                        </span>
+                        <span className={`text-sm font-bold ${p === 100 ? "text-emerald-500" : p === 0 ? "text-gray-400" : "text-pink-500"}`}>
+                          {p}%
+                        </span>
+                      </div>
+                      <ProgressBar owned={owned} total={t} color={color} />
                     </div>
-                    <ProgressBar owned={owned} total={t} />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           </>
