@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCurrentUser, signIn, signOut } from "@/lib/auth";
 
+const SHARED_USERNAME = "family";
+
 export default function LoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ログイン済みの場合はコレクションページへ
   useEffect(() => {
     getCurrentUser().then(() => router.replace("/collection/")).catch(() => {});
   }, [router]);
@@ -21,9 +21,8 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      // 既存セッションが残っている場合はサインアウトしてから再ログイン
       await signOut().catch(() => {});
-      await signIn({ username, password });
+      await signIn({ username: SHARED_USERNAME, password });
       router.replace("/collection/");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "ログインに失敗しました");
@@ -40,17 +39,6 @@ export default function LoginPage() {
         </h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-600 mb-1">ユーザー名</label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300"
-            />
-          </div>
-          <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-600 mb-1">パスワード</label>
             <input
               id="password"
@@ -58,6 +46,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoFocus
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300"
             />
           </div>
