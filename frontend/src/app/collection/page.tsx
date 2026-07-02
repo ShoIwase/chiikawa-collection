@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth";
 import AuthGuard from "@/components/AuthGuard";
 import AlertBanner from "@/components/AlertBanner";
-import FilterBar from "@/components/FilterBar";
+import FilterBar, { type SortKey } from "@/components/FilterBar";
 import CollectionGrid from "@/components/CollectionGrid";
 import ImageLightbox from "@/components/ImageLightbox";
 import TagEditor from "@/components/TagEditor";
 import { getCollectionItems, getPendingItems, updateItemStatus, updateItemTags } from "@/lib/api";
 import type { CollectionItem } from "@/lib/types";
+import { PREFECTURES, CHARACTERS } from "@/lib/types";
 
 export default function CollectionPage() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function CollectionPage() {
   const [selectedCity, setSelectedCity] = useState("");
   const [selectedCharacter, setSelectedCharacter] = useState("");
   const [showOwnedOnly, setShowOwnedOnly] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("name");
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
   const [editingItem, setEditingItem] = useState<CollectionItem | null>(null);
 
@@ -152,6 +154,37 @@ export default function CollectionPage() {
     });
   }, [displayItems, selectedTag, selectedPrefecture, selectedCity, selectedCharacter, searchText, showOwnedOnly]);
 
+  const PREF_RANK = useMemo<Map<string, number>>(() => new Map(PREFECTURES.map((p, i) => [p, i])), []);
+  const CHAR_RANK = useMemo<Map<string, number>>(() => new Map(CHARACTERS.map((c, i) => [c, i])), []);
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    switch (sortKey) {
+      case "name":
+        return arr.sort((a, b) => a.ItemName.localeCompare(b.ItemName, "ja"));
+      case "area":
+        return arr.sort((a, b) => {
+          const ra = PREF_RANK.get(a.Prefecture ?? "") ?? 999;
+          const rb = PREF_RANK.get(b.Prefecture ?? "") ?? 999;
+          if (ra !== rb) return ra - rb;
+          return a.AreaName.localeCompare(b.AreaName, "ja");
+        });
+      case "character":
+        return arr.sort((a, b) => {
+          const ra = CHAR_RANK.get(a.Motif) ?? 999;
+          const rb = CHAR_RANK.get(b.Motif) ?? 999;
+          if (ra !== rb) return ra - rb;
+          return a.AreaName.localeCompare(b.AreaName, "ja");
+        });
+      case "owned-first":
+        return arr.sort((a, b) => Number(b.Owned) - Number(a.Owned));
+      case "unowned-first":
+        return arr.sort((a, b) => Number(a.Owned) - Number(b.Owned));
+      default:
+        return arr;
+    }
+  }, [filtered, sortKey, PREF_RANK, CHAR_RANK]);
+
   const ownedCount = displayItems.filter((i) => i.Owned).length;
 
   return (
@@ -182,12 +215,14 @@ export default function CollectionPage() {
           selectedCity={selectedCity}
           selectedCharacter={selectedCharacter}
           showOwnedOnly={showOwnedOnly}
+          sortKey={sortKey}
           onSearchTextChange={setSearchText}
           onTagChange={setSelectedTag}
           onPrefectureChange={handlePrefectureChange}
           onCityChange={setSelectedCity}
           onCharacterChange={setSelectedCharacter}
           onShowOwnedOnlyChange={setShowOwnedOnly}
+          onSortKeyChange={setSortKey}
         />
 
         {loading && (
@@ -198,7 +233,7 @@ export default function CollectionPage() {
         {error && <p className="text-red-500 text-sm">{error}</p>}
         {!loading && (
           <CollectionGrid
-            items={filtered}
+            items={sorted}
             dirtyNames={dirtyNames}
             onToggle={handleToggleLocal}
             onZoom={(src, alt) => setZoomedImage({ src, alt })}
