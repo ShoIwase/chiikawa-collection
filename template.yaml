@@ -55,6 +55,7 @@ Resources:
         AllowMethods:
           - GET
           - PUT
+          - POST
           - OPTIONS
         AllowHeaders:
           - Authorization
@@ -166,6 +167,40 @@ Resources:
           Properties:
             ScheduleExpression: "cron(0 0 * * ? *)"
             Description: "毎日 9:00 JST にスクレイピング実行"
+
+  # ---------------------------------------------------------------------------
+  # Scanner Lambda: Python 3.12 — ユーザー写真からキーホルダーを認識して返す
+  # ---------------------------------------------------------------------------
+  ChiikawaScannerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: chiikawa-scanner
+      CodeUri: lambda/scanner/
+      Handler: handler.lambda_handler
+      Runtime: python3.12
+      MemorySize: 512
+      Timeout: 60
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Scan
+              Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MasterTableName}"
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/jp.anthropic.claude-sonnet-4-5-20250929-v1:0"
+                - !Sub "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
+      Events:
+        ScanPhoto:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ChiikawaHttpApi
+            Path: /scan
+            Method: POST
 
   # ---------------------------------------------------------------------------
   # SAM デプロイ後に API URL を SSM に書き込む (frontend CI が参照)

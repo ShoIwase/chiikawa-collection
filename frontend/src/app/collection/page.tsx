@@ -10,6 +10,7 @@ import FilterBar, { type SortKey } from "@/components/FilterBar";
 import CollectionGrid from "@/components/CollectionGrid";
 import ImageLightbox from "@/components/ImageLightbox";
 import TagEditor from "@/components/TagEditor";
+import ScanModal from "@/components/ScanModal";
 import { getCollectionItems, getPendingItems, updateItemStatus, updateItemTags } from "@/lib/api";
 import type { CollectionItem } from "@/lib/types";
 import { PREFECTURES, CHARACTERS } from "@/lib/types";
@@ -32,9 +33,10 @@ export default function CollectionPage() {
   const [selectedCity, setSelectedCity] = useState("");
   const [selectedCharacter, setSelectedCharacter] = useState("");
   const [showOwnedOnly, setShowOwnedOnly] = useState(false);
-  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortKey, setSortKey] = useState<SortKey>("area");
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
   const [editingItem, setEditingItem] = useState<CollectionItem | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([getCollectionItems(), getPendingItems()])
@@ -100,6 +102,11 @@ export default function CollectionPage() {
   const handleCancel = useCallback(() => {
     setPending({});
     setSaveError("");
+  }, []);
+
+  const handleScanUpdated = useCallback((updatedNames: string[]) => {
+    const nameSet = new Set(updatedNames);
+    setItems((prev) => prev.map((i) => (nameSet.has(i.ItemName) ? { ...i, Owned: true } : i)));
   }, []);
 
   const handleSaveTags = useCallback(async (tags: string[]) => {
@@ -168,7 +175,9 @@ export default function CollectionPage() {
           const ra = PREF_RANK.get(a.Prefecture ?? "") ?? 999;
           const rb = PREF_RANK.get(b.Prefecture ?? "") ?? 999;
           if (ra !== rb) return ra - rb;
-          return a.AreaName.localeCompare(b.AreaName, "ja");
+          const areaComp = a.AreaName.localeCompare(b.AreaName, "ja");
+          if (areaComp !== 0) return areaComp;
+          return (CHAR_RANK.get(a.Motif) ?? 999) - (CHAR_RANK.get(b.Motif) ?? 999);
         });
       case "character":
         return arr.sort((a, b) => {
@@ -199,6 +208,12 @@ export default function CollectionPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setScanOpen(true)}
+              className="text-xs text-white bg-pink-400 hover:bg-pink-500 px-2.5 py-1 rounded-full transition-colors"
+            >
+              写真スキャン
+            </button>
             <Link href="/stats/" className="text-xs text-gray-400 underline">
               集計
             </Link>
@@ -282,6 +297,10 @@ export default function CollectionPage() {
           alt={zoomedImage.alt}
           onClose={() => setZoomedImage(null)}
         />
+      )}
+
+      {scanOpen && (
+        <ScanModal onClose={() => setScanOpen(false)} onUpdated={handleScanUpdated} />
       )}
 
       {editingItem && (

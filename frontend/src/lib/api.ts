@@ -47,6 +47,28 @@ export async function updateItemTags(itemName: string, tags: string[]): Promise<
   if (!res.ok) throw new Error(`PUT /items/${itemName}/tags failed: ${res.status}`);
 }
 
+export type ScanMatchedItem = {
+  itemName: string;
+  areaName: string;
+  motif: string;
+  prefecture: string;
+};
+
+export type ScanResult = {
+  areas: string[];
+  matched: ScanMatchedItem[];
+};
+
+export async function scanPhoto(imageBase64: string, mimeType: string): Promise<ScanResult> {
+  const res = await fetch(`${API_URL}/scan`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: JSON.stringify({ image: imageBase64, mimeType }),
+  });
+  if (!res.ok) throw new Error(`POST /scan failed: ${res.status}`);
+  return res.json();
+}
+
 export async function verifyItem(
   itemName: string,
   patch: { areaType?: string; areaName?: string; motif?: string }
