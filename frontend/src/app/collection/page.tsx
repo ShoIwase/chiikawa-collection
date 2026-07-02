@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { signOut } from "@/lib/auth";
 import AuthGuard from "@/components/AuthGuard";
 import AlertBanner from "@/components/AlertBanner";
@@ -197,12 +198,17 @@ export default function CollectionPage() {
               {ownedCount} / {items.length} 個所持
             </p>
           </div>
-          <button
-            onClick={() => signOut().then(() => router.replace("/login/"))}
-            className="text-xs text-gray-400 underline"
-          >
-            ログアウト
-          </button>
+          <div className="flex items-center gap-3">
+            <Link href="/stats/" className="text-xs text-gray-400 underline">
+              集計
+            </Link>
+            <button
+              onClick={() => signOut().then(() => router.replace("/login/"))}
+              className="text-xs text-gray-400 underline"
+            >
+              ログアウト
+            </button>
+          </div>
         </header>
 
         <AlertBanner count={pendingCount} />
