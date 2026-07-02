@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signOut } from "@/lib/auth";
@@ -38,6 +38,20 @@ export default function CollectionPage() {
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
   const [editingItem, setEditingItem] = useState<CollectionItem | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
+  const [fabVisible, setFabVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const y = window.scrollY;
+      // 下スクロールで隠す、上スクロール or 上部付近で見せる
+      if (y > lastScrollY.current && y > 60) setFabVisible(false);
+      else setFabVisible(true);
+      lastScrollY.current = y;
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     Promise.all([getCollectionItems(), getPendingItems()])
@@ -238,23 +252,12 @@ export default function CollectionPage() {
               {ownedCount} / {items.length} 個所持
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setScanOpen(true)}
-              className="text-xs text-white bg-pink-400 hover:bg-pink-500 px-2.5 py-1 rounded-full transition-colors"
-            >
-              写真スキャン
-            </button>
-            <Link href="/stats/" className="text-xs text-white bg-gray-400 hover:bg-gray-500 px-2.5 py-1 rounded-full transition-colors">
-              集計
-            </Link>
-            <button
-              onClick={() => signOut().then(() => router.replace("/login/"))}
-              className="text-xs text-gray-400 underline"
-            >
-              ログアウト
-            </button>
-          </div>
+          <button
+            onClick={() => signOut().then(() => router.replace("/login/"))}
+            className="text-xs text-gray-400 underline"
+          >
+            ログアウト
+          </button>
         </header>
 
         <AlertBanner count={pendingCount} />
@@ -327,6 +330,22 @@ export default function CollectionPage() {
           </div>
         </div>
       )}
+
+      {/* 浮きボタン（写真スキャン・集計） */}
+      <div className={`fixed right-4 z-30 flex flex-col gap-2 transition-all duration-300 ${dirtyCount > 0 ? "bottom-24" : "bottom-6"} ${fabVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}`}>
+        <button
+          onClick={() => setScanOpen(true)}
+          className="flex items-center gap-1.5 bg-pink-500 hover:bg-pink-600 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-lg active:scale-95 transition-transform"
+        >
+          📷 スキャン
+        </button>
+        <Link
+          href="/stats/"
+          className="flex items-center gap-1.5 bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-full shadow-lg border border-gray-200 active:scale-95 transition-transform"
+        >
+          📊 集計
+        </Link>
+      </div>
 
       {zoomedImage && (
         <ImageLightbox
