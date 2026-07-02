@@ -262,7 +262,6 @@ export default function CollectionPage() {
         <FilterBar
           items={items}
           searchText={searchText}
-          selectedTag=""
           selectedTags={selectedTags}
           selectedPrefecture={selectedPrefecture}
           selectedCity={selectedCity}
