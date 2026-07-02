@@ -2,29 +2,34 @@
 
 import { useMemo } from "react";
 import type { CollectionItem } from "@/lib/types";
-import { CHARACTERS, PREFECTURES, OTHER_AREA_LABEL } from "@/lib/types";
+import { CHARACTERS, PREFECTURES, OTHER_AREA_LABEL, WANT_TAG, FAV_TAG } from "@/lib/types";
 
 export type SortKey = "name" | "area" | "character" | "owned-first" | "unowned-first";
 
 type Props = {
   items: CollectionItem[];
   searchText: string;
-  selectedTag: string;
+  selectedTag: string;           // 現在選択中（select の表示用）
+  selectedTags: string[];        // 複数選択中のタグ一覧
   selectedPrefecture: string;
   selectedCity: string;
-  selectedCharacter: string;
+  selectedCharacters: string[];
   showOwnedOnly: boolean;
+  showWanted: boolean;
+  showFavorite: boolean;
   sortKey: SortKey;
   onSearchTextChange: (v: string) => void;
-  onTagChange: (v: string) => void;
+  onTagToggle: (tag: string) => void;
   onPrefectureChange: (v: string) => void;
   onCityChange: (v: string) => void;
-  onCharacterChange: (v: string) => void;
+  onCharacterToggle: (c: string) => void;
   onShowOwnedOnlyChange: (v: boolean) => void;
+  onShowWantedChange: (v: boolean) => void;
+  onShowFavoriteChange: (v: boolean) => void;
   onSortKeyChange: (v: SortKey) => void;
+  onClearAll: () => void;
 };
 
-// 商品の所属エリア括り（都道府県、無ければ「その他」）
 function bucketOf(item: CollectionItem): string {
   return item.Prefecture || OTHER_AREA_LABEL;
 }
@@ -32,27 +37,34 @@ function bucketOf(item: CollectionItem): string {
 export default function FilterBar({
   items,
   searchText,
-  selectedTag,
+  selectedTags,
   selectedPrefecture,
   selectedCity,
-  selectedCharacter,
+  selectedCharacters,
   showOwnedOnly,
+  showWanted,
+  showFavorite,
   sortKey,
   onSearchTextChange,
-  onTagChange,
+  onTagToggle,
   onPrefectureChange,
   onCityChange,
-  onCharacterChange,
+  onCharacterToggle,
   onShowOwnedOnlyChange,
+  onShowWantedChange,
+  onShowFavoriteChange,
   onSortKeyChange,
+  onClearAll,
 }: Props) {
+  // 欲しい・お気に入り以外のユーザータグ
   const allTags = useMemo(() => {
     const set = new Set<string>();
-    items.forEach((i) => i.Tags?.forEach((t) => set.add(t)));
+    items.forEach((i) => i.Tags?.forEach((t) => {
+      if (t !== WANT_TAG && t !== FAV_TAG) set.add(t);
+    }));
     return [...set].sort();
   }, [items]);
 
-  // データに存在する都道府県を地理順に。属さないものは末尾に「その他」。
   const prefsPresent = useMemo(() => {
     const set = new Set<string>();
     items.forEach((i) => set.add(bucketOf(i)));
@@ -61,13 +73,12 @@ export default function FilterBar({
     return ordered;
   }, [items]);
 
-  // 選択中の都道府県に含まれる市区町村（県全体の都道府県エントリは除外）
   const citiesInPref = useMemo(() => {
     if (!selectedPrefecture) return [];
     const set = new Set<string>();
     items.forEach((i) => {
       if (bucketOf(i) !== selectedPrefecture) return;
-      if (i.AreaType === "都道府県") return; // 県全体エントリは市レベルに出さない
+      if (i.AreaType === "都道府県") return;
       if (i.AreaName) set.add(i.AreaName);
     });
     return [...set].sort();
@@ -75,14 +86,17 @@ export default function FilterBar({
 
   const hasFilter =
     searchText ||
-    selectedTag ||
+    selectedTags.length > 0 ||
     selectedPrefecture ||
     selectedCity ||
-    selectedCharacter ||
-    showOwnedOnly;
+    selectedCharacters.length > 0 ||
+    showOwnedOnly ||
+    showWanted ||
+    showFavorite;
 
   return (
     <div className="space-y-2">
+      {/* 検索 + 並べ替え */}
       <div className="flex gap-2">
         <input
           type="search"
@@ -104,8 +118,9 @@ export default function FilterBar({
           <option value="unowned-first">未所持優先</option>
         </select>
       </div>
+
+      {/* 都道府県 → 市区町村 + タグ + 未所持 + クリア */}
       <div className="flex gap-2 flex-wrap items-center">
-        {/* 都道府県 → 市区町村（カスケード。県だけでもOK、市は任意） */}
         <select
           value={selectedPrefecture}
           aria-label="都道府県で絞り込み"
@@ -131,17 +146,22 @@ export default function FilterBar({
           ))}
         </select>
 
-        <select
-          value={selectedTag}
-          aria-label="タグで絞り込み"
-          onChange={(e) => onTagChange(e.target.value)}
-          className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-300"
-        >
-          <option value="">タグ</option>
-          {allTags.map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
+        {/* タグ複数選択: 選択するたびにチップに追加 */}
+        {allTags.length > 0 && (
+          <select
+            value=""
+            aria-label="タグで絞り込み"
+            onChange={(e) => { if (e.target.value) onTagToggle(e.target.value); }}
+            className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-300"
+          >
+            <option value="">タグ</option>
+            {allTags.map((t) => (
+              <option key={t} value={t} disabled={selectedTags.includes(t)}>
+                {t}{selectedTags.includes(t) ? " ✓" : ""}
+              </option>
+            ))}
+          </select>
+        )}
 
         <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
           <input
@@ -154,33 +174,23 @@ export default function FilterBar({
         </label>
 
         {hasFilter && (
-          <button
-            onClick={() => {
-              onSearchTextChange("");
-              onTagChange("");
-              onPrefectureChange("");
-              onCityChange("");
-              onCharacterChange("");
-              onShowOwnedOnlyChange(false);
-            }}
-            className="text-xs text-gray-400 underline"
-          >
+          <button onClick={onClearAll} className="text-xs text-gray-400 underline">
             クリア
           </button>
         )}
       </div>
 
-      {/* キャラクター絞り込み（トグルボタン） */}
+      {/* キャラ複数選択 */}
       <div className="flex gap-2 items-center">
         <span className="text-xs text-gray-400">キャラ:</span>
         {CHARACTERS.map((c) => {
-          const active = selectedCharacter === c;
+          const active = selectedCharacters.includes(c);
           return (
             <button
               key={c}
               type="button"
               aria-pressed={active}
-              onClick={() => onCharacterChange(active ? "" : c)}
+              onClick={() => onCharacterToggle(c)}
               className={
                 active
                   ? "text-xs font-medium px-2.5 py-1 rounded-full bg-pink-400 text-white"
@@ -193,14 +203,45 @@ export default function FilterBar({
         })}
       </div>
 
-      {/* 選択中タグのバッジ */}
-      {selectedTag && (
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">絞り込み中:</span>
-          <span className="inline-flex items-center gap-1 bg-pink-100 text-pink-700 text-xs font-medium px-2 py-0.5 rounded-full">
-            {selectedTag}
-            <button onClick={() => onTagChange("")} className="text-pink-400 hover:text-pink-600">×</button>
-          </span>
+      {/* 欲しい / お気に入りフィルタ */}
+      <div className="flex gap-2 items-center">
+        <span className="text-xs text-gray-400">絞り込み:</span>
+        <button
+          type="button"
+          aria-pressed={showWanted}
+          onClick={() => onShowWantedChange(!showWanted)}
+          className={
+            showWanted
+              ? "text-xs font-medium px-2.5 py-1 rounded-full bg-red-100 text-red-500"
+              : "text-xs font-medium px-2.5 py-1 rounded-full bg-gray-50 text-gray-500 hover:bg-gray-100"
+          }
+        >
+          ❤️ 欲しい
+        </button>
+        <button
+          type="button"
+          aria-pressed={showFavorite}
+          onClick={() => onShowFavoriteChange(!showFavorite)}
+          className={
+            showFavorite
+              ? "text-xs font-medium px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-600"
+              : "text-xs font-medium px-2.5 py-1 rounded-full bg-gray-50 text-gray-500 hover:bg-gray-100"
+          }
+        >
+          ⭐ お気に入り
+        </button>
+      </div>
+
+      {/* 選択中タグのチップ */}
+      {selectedTags.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-500">タグ:</span>
+          {selectedTags.map((t) => (
+            <span key={t} className="inline-flex items-center gap-1 bg-pink-100 text-pink-700 text-xs font-medium px-2 py-0.5 rounded-full">
+              {t}
+              <button onClick={() => onTagToggle(t)} className="text-pink-400 hover:text-pink-600">×</button>
+            </span>
+          ))}
         </div>
       )}
     </div>

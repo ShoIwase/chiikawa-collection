@@ -37,3 +37,6 @@ export type AreaType = (typeof AREA_TYPES)[number];
 
 export const CHARACTERS = ["ちいかわ", "ハチワレ", "うさぎ"] as const;
 export type Character = (typeof CHARACTERS)[number];
+
+export const WANT_TAG = "欲しい";
+export const FAV_TAG = "お気に入り";
