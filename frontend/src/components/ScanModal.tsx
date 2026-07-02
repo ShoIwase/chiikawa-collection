@@ -6,6 +6,7 @@ import { scanPhoto, updateItemStatus, type ScanMatchedItem } from "@/lib/api";
 type Props = {
   onClose: () => void;
   onUpdated: (itemNames: string[]) => void;
+  ownedNames: Set<string>;
 };
 
 const MAX_PX = 1600;
@@ -35,7 +36,7 @@ async function resizeAndEncode(file: File): Promise<{ base64: string; mimeType: 
 // キャラ表示順
 const CHAR_ORDER: Record<string, number> = { ちいかわ: 0, ハチワレ: 1, うさぎ: 2 };
 
-export default function ScanModal({ onClose, onUpdated }: Props) {
+export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -67,7 +68,8 @@ export default function ScanModal({ onClose, onUpdated }: Props) {
           (CHAR_ORDER[a.motif] ?? 9) - (CHAR_ORDER[b.motif] ?? 9)
       );
       setMatched(sorted);
-      setChecked(new Set(sorted.map((i) => i.itemName)));
+      // 未所持のものだけ初期チェック
+      setChecked(new Set(sorted.filter((i) => !ownedNames.has(i.itemName)).map((i) => i.itemName)));
     } catch (e) {
       setScanError(e instanceof Error ? e.message : "スキャンに失敗しました");
     } finally {
@@ -199,17 +201,24 @@ export default function ScanModal({ onClose, onUpdated }: Props) {
                       </span>
                     </button>
                     <div className="divide-y divide-gray-50">
-                      {items.map((item) => (
-                        <label key={item.itemName} className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            checked={checked.has(item.itemName)}
-                            onChange={() => toggleItem(item.itemName)}
-                            className="accent-pink-400"
-                          />
-                          <span className="text-sm text-gray-600">{item.motif}</span>
-                        </label>
-                      ))}
+                      {items.map((item) => {
+                        const alreadyOwned = ownedNames.has(item.itemName);
+                        return (
+                          <label key={item.itemName} className={`flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-gray-50 ${alreadyOwned ? "opacity-60" : ""}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked.has(item.itemName)}
+                              onChange={() => toggleItem(item.itemName)}
+                              disabled={alreadyOwned}
+                              className="accent-pink-400"
+                            />
+                            <span className="text-sm text-gray-600">{item.motif}</span>
+                            {alreadyOwned && (
+                              <span className="ml-auto text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">登録済み</span>
+                            )}
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 );

@@ -196,6 +196,7 @@ export default function CollectionPage() {
   }, [filtered, sortKey, PREF_RANK, CHAR_RANK]);
 
   const ownedCount = displayItems.filter((i) => i.Owned).length;
+  const ownedNames = useMemo(() => new Set(items.filter((i) => i.Owned).map((i) => i.ItemName)), [items]);
 
   return (
     <AuthGuard>
@@ -300,7 +301,11 @@ export default function CollectionPage() {
       )}
 
       {scanOpen && (
-        <ScanModal onClose={() => setScanOpen(false)} onUpdated={handleScanUpdated} />
+        <ScanModal
+          onClose={() => setScanOpen(false)}
+          onUpdated={handleScanUpdated}
+          ownedNames={ownedNames}
+        />
       )}
 
       {editingItem && (
