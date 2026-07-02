@@ -13,7 +13,7 @@ import TagEditor from "@/components/TagEditor";
 import ScanModal from "@/components/ScanModal";
 import { getCollectionItems, getPendingItems, updateItemStatus, updateItemTags } from "@/lib/api";
 import type { CollectionItem } from "@/lib/types";
-import { PREFECTURES, CHARACTERS } from "@/lib/types";
+import { PREFECTURES, CHARACTERS, WANT_TAG, FAV_TAG } from "@/lib/types";
 
 export default function CollectionPage() {
   const router = useRouter();
@@ -22,17 +22,18 @@ export default function CollectionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // 所持トグルは即時保存せず、未保存の変更を pending に溜めて保存ボタンで確定する
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
   const [searchText, setSearchText] = useState("");
-  const [selectedTag, setSelectedTag] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedPrefecture, setSelectedPrefecture] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
-  const [selectedCharacter, setSelectedCharacter] = useState("");
+  const [selectedCharacters, setSelectedCharacters] = useState<string[]>([]);
   const [showOwnedOnly, setShowOwnedOnly] = useState(false);
+  const [showWanted, setShowWanted] = useState(false);
+  const [showFavorite, setShowFavorite] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("area");
   const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
   const [editingItem, setEditingItem] = useState<CollectionItem | null>(null);
@@ -54,7 +55,6 @@ export default function CollectionPage() {
     return m;
   }, [items]);
 
-  // タップは未保存の変更として記録するだけ（サーバーには送らない）
   const handleToggleLocal = useCallback((item: CollectionItem) => {
     const name = item.ItemName;
     const server = itemsByName.get(name)?.Owned ?? false;
@@ -62,7 +62,7 @@ export default function CollectionPage() {
       const current = name in prev ? prev[name] : server;
       const next = !current;
       const np = { ...prev };
-      if (next === server) delete np[name]; // サーバー値と同じに戻したら変更を取り消し
+      if (next === server) delete np[name];
       else np[name] = next;
       return np;
     });
@@ -84,7 +84,6 @@ export default function CollectionPage() {
       );
       setPending({});
     } catch {
-      // 成功した分だけ反映し、失敗分は未保存のまま残す
       setItems((prev) =>
         prev.map((i) => (succeeded.includes(i.ItemName) ? { ...i, Owned: pending[i.ItemName] } : i))
       );
@@ -104,11 +103,6 @@ export default function CollectionPage() {
     setSaveError("");
   }, []);
 
-  const handleScanUpdated = useCallback((updatedNames: string[]) => {
-    const nameSet = new Set(updatedNames);
-    setItems((prev) => prev.map((i) => (nameSet.has(i.ItemName) ? { ...i, Owned: true } : i)));
-  }, []);
-
   const handleSaveTags = useCallback(async (tags: string[]) => {
     if (!editingItem) return;
     await updateItemTags(editingItem.ItemName, tags);
@@ -117,19 +111,54 @@ export default function CollectionPage() {
     );
   }, [editingItem]);
 
-  const allTags = useMemo(() => {
-    const set = new Set<string>();
-    items.forEach((i) => i.Tags?.forEach((t) => set.add(t)));
-    return [...set].sort();
-  }, [items]);
+  // ❤️ / ⭐ の即時トグル（pendingを使わず直接保存）
+  const handleToggleSpecialTag = useCallback(async (item: CollectionItem, tagName: string) => {
+    const current = item.Tags ?? [];
+    const next = current.includes(tagName)
+      ? current.filter((t) => t !== tagName)
+      : [...current, tagName];
+    await updateItemTags(item.ItemName, next);
+    setItems((prev) =>
+      prev.map((i) => (i.ItemName === item.ItemName ? { ...i, Tags: next } : i))
+    );
+  }, []);
 
-  // 都道府県を変えたら市区町村の選択をリセットする
+  const handleToggleWant = useCallback((item: CollectionItem) => handleToggleSpecialTag(item, WANT_TAG), [handleToggleSpecialTag]);
+  const handleToggleFav = useCallback((item: CollectionItem) => handleToggleSpecialTag(item, FAV_TAG), [handleToggleSpecialTag]);
+
+  const handleTagToggle = useCallback((tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  }, []);
+
+  const handleCharacterToggle = useCallback((c: string) => {
+    setSelectedCharacters((prev) =>
+      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
+    );
+  }, []);
+
   const handlePrefectureChange = useCallback((v: string) => {
     setSelectedPrefecture(v);
     setSelectedCity("");
   }, []);
 
-  // 未保存の変更を反映した表示用アイテム（Owned は実効値）
+  const handleClearAll = useCallback(() => {
+    setSearchText("");
+    setSelectedTags([]);
+    setSelectedPrefecture("");
+    setSelectedCity("");
+    setSelectedCharacters([]);
+    setShowOwnedOnly(false);
+    setShowWanted(false);
+    setShowFavorite(false);
+  }, []);
+
+  const handleScanUpdated = useCallback((updatedNames: string[]) => {
+    const nameSet = new Set(updatedNames);
+    setItems((prev) => prev.map((i) => (nameSet.has(i.ItemName) ? { ...i, Owned: true } : i)));
+  }, []);
+
   const displayItems = useMemo(
     () => items.map((i) => (i.ItemName in pending ? { ...i, Owned: pending[i.ItemName] } : i)),
     [items, pending]
@@ -139,15 +168,16 @@ export default function CollectionPage() {
 
   const filtered = useMemo(() => {
     return displayItems.filter((item) => {
-      if (selectedTag && !item.Tags?.includes(selectedTag)) return false;
-      // 都道府県フィルタ（市区町村は親県に集約。海外・広域は「その他」）
+      if (selectedTags.length > 0 && !selectedTags.every((t) => item.Tags?.includes(t))) return false;
       if (selectedPrefecture) {
         const bucket = item.Prefecture || "その他";
         if (bucket !== selectedPrefecture) return false;
       }
       if (selectedCity && item.AreaName !== selectedCity) return false;
-      if (selectedCharacter && item.Motif !== selectedCharacter) return false;
+      if (selectedCharacters.length > 0 && !selectedCharacters.includes(item.Motif)) return false;
       if (showOwnedOnly && item.Owned) return false;
+      if (showWanted && !item.Tags?.includes(WANT_TAG)) return false;
+      if (showFavorite && !item.Tags?.includes(FAV_TAG)) return false;
       if (searchText) {
         const q = searchText.toLowerCase();
         return (
@@ -160,7 +190,7 @@ export default function CollectionPage() {
       }
       return true;
     });
-  }, [displayItems, selectedTag, selectedPrefecture, selectedCity, selectedCharacter, searchText, showOwnedOnly]);
+  }, [displayItems, selectedTags, selectedPrefecture, selectedCity, selectedCharacters, searchText, showOwnedOnly, showWanted, showFavorite]);
 
   const PREF_RANK = useMemo<Map<string, number>>(() => new Map(PREFECTURES.map((p, i) => [p, i])), []);
   const CHAR_RANK = useMemo<Map<string, number>>(() => new Map(CHARACTERS.map((c, i) => [c, i])), []);
@@ -232,19 +262,25 @@ export default function CollectionPage() {
         <FilterBar
           items={items}
           searchText={searchText}
-          selectedTag={selectedTag}
+          selectedTag=""
+          selectedTags={selectedTags}
           selectedPrefecture={selectedPrefecture}
           selectedCity={selectedCity}
-          selectedCharacter={selectedCharacter}
+          selectedCharacters={selectedCharacters}
           showOwnedOnly={showOwnedOnly}
+          showWanted={showWanted}
+          showFavorite={showFavorite}
           sortKey={sortKey}
           onSearchTextChange={setSearchText}
-          onTagChange={setSelectedTag}
+          onTagToggle={handleTagToggle}
           onPrefectureChange={handlePrefectureChange}
           onCityChange={setSelectedCity}
-          onCharacterChange={setSelectedCharacter}
+          onCharacterToggle={handleCharacterToggle}
           onShowOwnedOnlyChange={setShowOwnedOnly}
+          onShowWantedChange={setShowWanted}
+          onShowFavoriteChange={setShowFavorite}
           onSortKeyChange={setSortKey}
+          onClearAll={handleClearAll}
         />
 
         {loading && (
@@ -260,11 +296,12 @@ export default function CollectionPage() {
             onToggle={handleToggleLocal}
             onZoom={(src, alt) => setZoomedImage({ src, alt })}
             onEditTags={setEditingItem}
+            onToggleWant={handleToggleWant}
+            onToggleFav={handleToggleFav}
           />
         )}
       </div>
 
-      {/* 未保存の変更を確定する保存バー */}
       {dirtyCount > 0 && (
         <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-pink-200 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
           <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
@@ -300,20 +337,20 @@ export default function CollectionPage() {
         />
       )}
 
+      {editingItem && (
+        <TagEditor
+          item={editingItem}
+          allTags={items.flatMap((i) => i.Tags ?? []).filter((t) => t !== WANT_TAG && t !== FAV_TAG).filter((t, i, a) => a.indexOf(t) === i).sort()}
+          onSave={handleSaveTags}
+          onClose={() => setEditingItem(null)}
+        />
+      )}
+
       {scanOpen && (
         <ScanModal
           onClose={() => setScanOpen(false)}
           onUpdated={handleScanUpdated}
           ownedNames={ownedNames}
-        />
-      )}
-
-      {editingItem && (
-        <TagEditor
-          item={editingItem}
-          allTags={allTags}
-          onSave={handleSaveTags}
-          onClose={() => setEditingItem(null)}
         />
       )}
     </AuthGuard>
