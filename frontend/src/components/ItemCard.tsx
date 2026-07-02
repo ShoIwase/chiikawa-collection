@@ -33,7 +33,7 @@ export default function ItemCard({ item, dirty, onToggle, onZoom, onEditTags, on
   return (
     <div
       data-testid={`card-${item.ItemName}`}
-      className={`relative rounded-2xl overflow-hidden shadow-sm transition-all ${dimClass} ${ringClass}`}
+      className={`relative rounded-2xl overflow-hidden shadow-sm transition-all ${ringClass}`}
     >
       {/* 状態バッジ（左上・クリックを妨げない）: 未保存 > 所持 */}
       {dirty ? (
@@ -52,7 +52,7 @@ export default function ItemCard({ item, dirty, onToggle, onZoom, onEditTags, on
         onClick={() => onToggle(item)}
         aria-pressed={item.Owned}
         aria-label={`${item.ItemName} の所持をトグル`}
-        className="block w-full text-left active:scale-[0.98] transition-transform"
+        className={`block w-full text-left active:scale-[0.98] transition-transform ${dimClass}`}
       >
         <div className="w-full aspect-square bg-gray-100 relative">
           <Image src={imageUrl} alt={item.ItemName} fill className="object-cover" unoptimized />
