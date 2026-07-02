@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import type { CollectionItem } from "@/lib/types";
 import { CHARACTERS, PREFECTURES, OTHER_AREA_LABEL } from "@/lib/types";
 
+export type SortKey = "name" | "area" | "character" | "owned-first" | "unowned-first";
+
 type Props = {
   items: CollectionItem[];
   searchText: string;
@@ -12,12 +14,14 @@ type Props = {
   selectedCity: string;
   selectedCharacter: string;
   showOwnedOnly: boolean;
+  sortKey: SortKey;
   onSearchTextChange: (v: string) => void;
   onTagChange: (v: string) => void;
   onPrefectureChange: (v: string) => void;
   onCityChange: (v: string) => void;
   onCharacterChange: (v: string) => void;
   onShowOwnedOnlyChange: (v: boolean) => void;
+  onSortKeyChange: (v: SortKey) => void;
 };
 
 // 商品の所属エリア括り（都道府県、無ければ「その他」）
@@ -33,12 +37,14 @@ export default function FilterBar({
   selectedCity,
   selectedCharacter,
   showOwnedOnly,
+  sortKey,
   onSearchTextChange,
   onTagChange,
   onPrefectureChange,
   onCityChange,
   onCharacterChange,
   onShowOwnedOnlyChange,
+  onSortKeyChange,
 }: Props) {
   const allTags = useMemo(() => {
     const set = new Set<string>();
@@ -77,13 +83,27 @@ export default function FilterBar({
 
   return (
     <div className="space-y-2">
-      <input
-        type="search"
-        placeholder="アイテム名・モチーフで検索..."
-        value={searchText}
-        onChange={(e) => onSearchTextChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
-      />
+      <div className="flex gap-2">
+        <input
+          type="search"
+          placeholder="アイテム名・モチーフで検索..."
+          value={searchText}
+          onChange={(e) => onSearchTextChange(e.target.value)}
+          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
+        />
+        <select
+          value={sortKey}
+          aria-label="並べ替え"
+          onChange={(e) => onSortKeyChange(e.target.value as SortKey)}
+          className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-300"
+        >
+          <option value="name">名前順</option>
+          <option value="area">地域順</option>
+          <option value="character">キャラ順</option>
+          <option value="owned-first">所持済み優先</option>
+          <option value="unowned-first">未所持優先</option>
+        </select>
+      </div>
       <div className="flex gap-2 flex-wrap items-center">
         {/* 都道府県 → 市区町村（カスケード。県だけでもOK、市は任意） */}
         <select
