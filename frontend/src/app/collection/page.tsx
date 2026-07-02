@@ -245,7 +245,7 @@ export default function CollectionPage() {
             >
               写真スキャン
             </button>
-            <Link href="/stats/" className="text-xs text-gray-400 underline">
+            <Link href="/stats/" className="text-xs text-white bg-gray-400 hover:bg-gray-500 px-2.5 py-1 rounded-full transition-colors">
               集計
             </Link>
             <button
