@@ -77,7 +77,12 @@ def fetch_items(target_url: str) -> list[ScrapedItem]:
 
 
 def _collect_pages(top_url: str) -> list[str]:
-    """トップページのページネーションリンクから全ページ URL を収集する。"""
+    """全ページ URL を収集する。
+
+    トップページのナビリンクで最大ページ番号を取得後、
+    ナビに現れない追加ページを連続プローブして漏れを防ぐ。
+    サイト更新でページが増えた場合もスキップなく収集できる。
+    """
     resp = requests.get(top_url, headers=_HEADERS, timeout=30)
     resp.raise_for_status()
     resp.encoding = "shift_jis"
@@ -93,6 +98,28 @@ def _collect_pages(top_url: str) -> list[str]:
         if full not in seen:
             seen.add(full)
             pages.append(full)
+
+    # ナビに現れない追加ページを探す（サイト更新でページが増えた場合に対応）
+    import re as _re
+    max_pge = max(
+        (int(m.group(1)) for url in pages for m in [_re.search(r"PGE(\d+)", url)] if m),
+        default=1,
+    )
+    for n in range(max_pge + 1, max_pge + 10):
+        probe_url = urllib.parse.urljoin(top_url, f"PGE{n}/")
+        try:
+            probe = requests.get(probe_url, headers=_HEADERS, timeout=10)
+            if probe.status_code == 404:
+                break
+            probe.encoding = "shift_jis"
+            probe_soup = BeautifulSoup(probe.text, "html.parser")
+            if not probe_soup.select("a.lightbox"):
+                break
+            seen.add(probe_url)
+            pages.append(probe_url)
+            logger.info("Found extra page not in nav: %s", probe_url)
+        except Exception:
+            break
 
     return pages
 
