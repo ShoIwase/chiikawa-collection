@@ -16,7 +16,7 @@ test.describe("コレクションページ", () => {
     await page.goto("/collection/");
 
     for (const item of MOCK_ITEMS) {
-      await expect(page.getByText(item.ItemName)).toBeVisible();
+      await expect(page.getByTestId(`card-${item.ItemName}`)).toBeVisible();
     }
   });
 
@@ -37,9 +37,9 @@ test.describe("コレクションページ", () => {
     await page.goto("/collection/");
 
     const unownedItem = MOCK_ITEMS.find((i) => !i.Owned)!;
-    const card = page.getByTestId(`card-${unownedItem.ItemName}`);
-    await expect(card).toHaveClass(/grayscale/);
-    await expect(card).toHaveClass(/opacity-50/);
+    const toggle = page.getByRole("button", { name: `${unownedItem.ItemName} の所持をトグル` });
+    await expect(toggle).toHaveClass(/grayscale/);
+    await expect(toggle).toHaveClass(/opacity-50/);
   });
 
   test("所持アイテムはリングつきで表示される", async ({ page }) => {
@@ -90,13 +90,13 @@ test.describe("コレクションページ", () => {
     await page.goto("/collection/");
 
     const unownedItem = MOCK_ITEMS.find((i) => !i.Owned)!;
-    const card = page.getByTestId(`card-${unownedItem.ItemName}`);
+    const toggle = page.getByRole("button", { name: `${unownedItem.ItemName} の所持をトグル` });
 
-    await page.getByRole("button", { name: `${unownedItem.ItemName} の所持をトグル` }).click();
+    await toggle.click();
     await page.getByRole("button", { name: "取消" }).click();
 
     // 元のグレーアウトに戻り、保存バーが消える
-    await expect(card).toHaveClass(/grayscale/);
+    await expect(toggle).toHaveClass(/grayscale/);
     await expect(page.getByText(/未保存の変更/)).not.toBeVisible();
   });
 
@@ -147,7 +147,7 @@ test.describe("コレクションページ", () => {
     await mockAuth(page);
     await mockApi(page, { items: MOCK_ITEMS });
     await page.goto("/collection/");
-    await expect(page.getByText(MOCK_ITEMS[0].ItemName)).toBeVisible();
+    await expect(page.getByTestId(`card-${MOCK_ITEMS[0].ItemName}`)).toBeVisible();
 
     const imgs = await page.locator("img").all();
     expect(imgs.length).toBeGreaterThan(0);

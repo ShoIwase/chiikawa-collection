@@ -63,7 +63,7 @@ test.describe("レスポンシブ", () => {
     await page.goto("/collection/");
 
     await expect(page.getByText("ちいかわコレクション")).toBeVisible();
-    await expect(page.getByPlaceholder("アイテム名・モチーフで検索...")).toBeVisible();
+    await expect(page.getByPlaceholder("名前・エリアで検索...")).toBeVisible();
     const grid = page.locator(".grid");
     await expect(grid).toBeVisible();
   });
@@ -86,7 +86,7 @@ test.describe("レスポンシブ", () => {
     await page.goto("/collection/");
 
     await expect(page.getByText("ちいかわコレクション")).toBeVisible();
-    await expect(page.getByPlaceholder("アイテム名・モチーフで検索...")).toBeVisible();
+    await expect(page.getByPlaceholder("名前・エリアで検索...")).toBeVisible();
   });
 
   test("デスクトップ: コレクションが表示される", async ({ page }) => {
@@ -160,12 +160,13 @@ test.describe("視覚フィードバック", () => {
     const unowned = MOCK_ITEMS.find((i) => !i.Owned)!;
 
     const ownedCard = page.getByTestId(`card-${owned.ItemName}`);
-    const unownedCard = page.getByTestId(`card-${unowned.ItemName}`);
+    const ownedToggle = page.getByRole("button", { name: `${owned.ItemName} の所持をトグル` });
+    const unownedToggle = page.getByRole("button", { name: `${unowned.ItemName} の所持をトグル` });
 
     await expect(ownedCard).toHaveClass(/ring-pink-400/);
-    await expect(ownedCard).not.toHaveClass(/grayscale/);
-    await expect(unownedCard).toHaveClass(/grayscale/);
-    await expect(unownedCard).toHaveClass(/opacity-50/);
+    await expect(ownedToggle).not.toHaveClass(/grayscale/);
+    await expect(unownedToggle).toHaveClass(/grayscale/);
+    await expect(unownedToggle).toHaveClass(/opacity-50/);
   });
 
   test("タップで即座に未保存ハイライトに切り替わる", async ({ page }) => {

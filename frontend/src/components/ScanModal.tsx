@@ -36,6 +36,8 @@ async function resizeAndEncode(file: File): Promise<{ base64: string; mimeType: 
 // キャラ表示順
 const CHAR_ORDER: Record<string, number> = { ちいかわ: 0, ハチワレ: 1, うさぎ: 2 };
 
+const CLOUDFRONT_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL ?? "";
+
 export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -123,6 +125,7 @@ export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
 
   // エリアごとにグループ化
   const groupedAreas = [...new Set(matched.map((i) => i.areaName))];
+  const unownedCount = matched.filter((i) => !ownedNames.has(i.itemName)).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
@@ -184,7 +187,7 @@ export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
           {!scanning && matched.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs text-gray-500">
-                {areas.length} エリアを認識 · {groupedAreas.length} アイテムにマッチ
+                {areas.length}エリアを認識 · 該当 {matched.length}件（未登録 {unownedCount}件）
               </p>
               {groupedAreas.map((areaName) => {
                 const items = matched.filter((i) => i.areaName === areaName);
@@ -212,6 +215,14 @@ export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
                               disabled={alreadyOwned}
                               className="accent-pink-400"
                             />
+                            {item.imageUrl && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={`${CLOUDFRONT_URL}${item.imageUrl}`}
+                                alt={item.motif}
+                                className="w-9 h-9 rounded object-cover flex-shrink-0 bg-gray-100"
+                              />
+                            )}
                             <span className="text-sm text-gray-600">{item.motif}</span>
                             {alreadyOwned && (
                               <span className="ml-auto text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">登録済み</span>

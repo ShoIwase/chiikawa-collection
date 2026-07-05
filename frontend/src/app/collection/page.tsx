@@ -247,7 +247,7 @@ export default function CollectionPage() {
       <div className={`max-w-2xl mx-auto px-4 py-6 space-y-4 ${dirtyCount > 0 ? "pb-24" : ""}`}>
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-pink-500">🐾 ちいかわコレクション</h1>
+            <h1 className="text-xl font-bold text-pink-500">🐾 ご当地ちいかわコレクション</h1>
             <p className="text-xs text-gray-400">
               {ownedCount} / {items.length} 個所持
             </p>

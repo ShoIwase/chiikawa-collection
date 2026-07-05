@@ -64,7 +64,7 @@ test("アイテム一覧と所持カウントが表示される", async ({ page 
   await expect(page).toHaveURL(/\/collection\//, { timeout: 30_000 });
 
   await expect(page.getByText(/\d+ \/ \d+ 個所持/)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByPlaceholder("アイテム名・モチーフで検索...")).toBeVisible();
+  await expect(page.getByPlaceholder("名前・エリアで検索...")).toBeVisible();
 });
 
 test("アイテム画像が実際に表示される（二重パスなし）", async ({ page }) => {
@@ -127,7 +127,7 @@ test("テキスト検索でアイテムが絞り込まれる", async ({ page }) 
   const totalBefore = await page.getByRole("button").filter({ has: page.locator("img") }).count();
   expect(totalBefore).toBeGreaterThan(0);
 
-  await page.getByPlaceholder("アイテム名・モチーフで検索...").fill("Dr.Yellow");
+  await page.getByPlaceholder("名前・エリアで検索...").fill("Dr.Yellow");
   await page.waitForTimeout(500);
 
   const filteredCount = await page.getByRole("button").filter({ has: page.locator("img") }).count();

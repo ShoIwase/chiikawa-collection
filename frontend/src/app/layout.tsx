@@ -10,7 +10,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja">
       <head>
-        <title>ちいかわコレクション</title>
+        <title>ご当地ちいかわコレクション</title>
       </head>
       <body className="bg-pink-50 min-h-screen text-gray-800">
         <main>{children}</main>

@@ -35,7 +35,7 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-screen px-4">
       <div className="bg-white rounded-2xl shadow-md p-8 w-full max-w-sm">
         <h1 className="text-2xl font-bold text-center text-pink-500 mb-6">
-          🐾 ちいかわコレクション
+          🐾 ご当地ちいかわコレクション
         </h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

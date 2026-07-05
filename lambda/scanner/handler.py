@@ -133,7 +133,7 @@ def _find_items_by_areas(areas: list[str]) -> list[dict]:
     # Scan して全アイテムを取得、AreaName でフィルタ（件数が多くないため許容）
     result = table.scan(
         FilterExpression=Attr("Category").eq(_CATEGORY),
-        ProjectionExpression="ItemName, AreaName, Motif, Prefecture",
+        ProjectionExpression="ItemName, AreaName, Motif, Prefecture, ImageUrl",
     )
     all_items = result.get("Items", [])
 
@@ -151,6 +151,7 @@ def _find_items_by_areas(areas: list[str]) -> list[dict]:
                 "areaName": item.get("AreaName", ""),
                 "motif": item.get("Motif", ""),
                 "prefecture": item.get("Prefecture", ""),
+                "imageUrl": item.get("ImageUrl", ""),
             })
 
     return matched

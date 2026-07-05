@@ -52,6 +52,7 @@ export type ScanMatchedItem = {
   areaName: string;
   motif: string;
   prefecture: string;
+  imageUrl: string;
 };
 
 export type ScanResult = {

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import type { CollectionItem } from "@/lib/types";
 import { WANT_TAG, FAV_TAG } from "@/lib/types";
+import { splitItemDisplay, formatDateTimeJst } from "@/lib/format";
 
 type Props = {
   item: CollectionItem;
@@ -21,6 +22,7 @@ export default function ItemCard({ item, dirty, onToggle, onZoom, onEditTags, on
 
   const isWanted = item.Tags?.includes(WANT_TAG) ?? false;
   const isFav = item.Tags?.includes(FAV_TAG) ?? false;
+  const { motif, detail } = splitItemDisplay(item);
 
   // 未保存(dirty)は琥珀色リングで強調、確定済みの所持はピンクリング
   const ringClass = dirty
@@ -58,10 +60,9 @@ export default function ItemCard({ item, dirty, onToggle, onZoom, onEditTags, on
           <Image src={imageUrl} alt={item.ItemName} fill className="object-cover" unoptimized />
         </div>
         <div className="p-2 pb-8 bg-white">
-          <p className="text-xs font-medium text-gray-700 line-clamp-2 leading-tight">
-            {item.ItemName}
-          </p>
-          {item.Tags && item.Tags.filter((t) => t !== WANT_TAG && t !== FAV_TAG).length > 0 ? (
+          <p className="text-xs font-medium text-gray-700 leading-tight">{motif}</p>
+          <p className="text-xs text-gray-600 line-clamp-2 leading-tight">{detail}</p>
+          {item.Tags && item.Tags.filter((t) => t !== WANT_TAG && t !== FAV_TAG).length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1">
               {item.Tags.filter((t) => t !== WANT_TAG && t !== FAV_TAG).slice(0, 3).map((tag) => (
                 <span
@@ -75,8 +76,9 @@ export default function ItemCard({ item, dirty, onToggle, onZoom, onEditTags, on
                 <span className="text-[10px] text-gray-400">+{item.Tags.filter((t) => t !== WANT_TAG && t !== FAV_TAG).length - 3}</span>
               )}
             </div>
-          ) : (
-            <p className="text-xs text-gray-400 mt-0.5">{item.AreaName}</p>
+          )}
+          {item.Owned && item.UpdatedAt && (
+            <p className="text-[10px] text-gray-400 mt-1">{formatDateTimeJst(item.UpdatedAt)}</p>
           )}
         </div>
       </button>
