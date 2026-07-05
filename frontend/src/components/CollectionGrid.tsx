@@ -47,9 +47,9 @@ export default function CollectionGrid({ items, dirtyNames, groupByPrefecture, o
       <div className="space-y-5">
         {groups.map((group) => (
           <div key={`${group.label}-${group.items[0].ItemName}`}>
-            <h2 className="text-sm font-bold text-gray-500 mb-2 flex items-center gap-2">
+            <h2 className="px-4 py-1.5 mb-3 rounded-xl bg-pink-400 text-white text-sm font-bold flex items-center gap-2">
               {group.label}
-              <span className="h-px flex-1 bg-gray-200" />
+              <span className="text-xs font-normal text-pink-100">{group.items.length}件</span>
             </h2>
             <ItemGrid items={group.items} {...cardProps} />
           </div>
