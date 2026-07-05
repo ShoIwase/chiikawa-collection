@@ -1,11 +1,13 @@
 "use client";
 
 import type { CollectionItem } from "@/lib/types";
+import { bucketOf } from "@/lib/types";
 import ItemCard from "./ItemCard";
 
 type Props = {
   items: CollectionItem[];
   dirtyNames?: Set<string>;
+  groupByPrefecture?: boolean;
   onToggle: (item: CollectionItem) => void;
   onZoom?: (imageUrl: string, alt: string) => void;
   onEditTags?: (item: CollectionItem) => void;
@@ -13,7 +15,21 @@ type Props = {
   onToggleFav?: (item: CollectionItem) => void;
 };
 
-export default function CollectionGrid({ items, dirtyNames, onToggle, onZoom, onEditTags, onToggleWant, onToggleFav }: Props) {
+function groupConsecutiveByPrefecture(items: CollectionItem[]) {
+  const groups: { label: string; items: CollectionItem[] }[] = [];
+  for (const item of items) {
+    const label = bucketOf(item);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) {
+      last.items.push(item);
+    } else {
+      groups.push({ label, items: [item] });
+    }
+  }
+  return groups;
+}
+
+export default function CollectionGrid({ items, dirtyNames, groupByPrefecture, onToggle, onZoom, onEditTags, onToggleWant, onToggleFav }: Props) {
   if (items.length === 0) {
     return (
       <div className="text-center py-16 text-gray-400">
@@ -23,6 +39,37 @@ export default function CollectionGrid({ items, dirtyNames, onToggle, onZoom, on
     );
   }
 
+  const cardProps = { dirtyNames, onToggle, onZoom, onEditTags, onToggleWant, onToggleFav };
+
+  if (groupByPrefecture) {
+    const groups = groupConsecutiveByPrefecture(items);
+    return (
+      <div className="space-y-5">
+        {groups.map((group) => (
+          <div key={`${group.label}-${group.items[0].ItemName}`}>
+            <h2 className="text-sm font-bold text-gray-500 mb-2 flex items-center gap-2">
+              {group.label}
+              <span className="h-px flex-1 bg-gray-200" />
+            </h2>
+            <ItemGrid items={group.items} {...cardProps} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return <ItemGrid items={items} {...cardProps} />;
+}
+
+function ItemGrid({
+  items,
+  dirtyNames,
+  onToggle,
+  onZoom,
+  onEditTags,
+  onToggleWant,
+  onToggleFav,
+}: Pick<Props, "items" | "dirtyNames" | "onToggle" | "onZoom" | "onEditTags" | "onToggleWant" | "onToggleFav">) {
   return (
     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
       {items.map((item) => (

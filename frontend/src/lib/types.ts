@@ -32,6 +32,11 @@ export type CollectionItem = MasterItem & {
   UpdatedAt?: string;
 };
 
+// 市区町村は親県に集約。海外・広域等（Prefectureが空）は「その他」に括る。
+export function bucketOf(item: Pick<MasterItem, "Prefecture">): string {
+  return item.Prefecture || OTHER_AREA_LABEL;
+}
+
 export const AREA_TYPES = ["都道府県", "市区町村", "その他"] as const;
 export type AreaType = (typeof AREA_TYPES)[number];
 

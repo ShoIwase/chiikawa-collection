@@ -295,6 +295,7 @@ export default function CollectionPage() {
           <CollectionGrid
             items={sorted}
             dirtyNames={dirtyNames}
+            groupByPrefecture={sortKey === "area"}
             onToggle={handleToggleLocal}
             onZoom={(src, alt) => setZoomedImage({ src, alt })}
             onEditTags={setEditingItem}

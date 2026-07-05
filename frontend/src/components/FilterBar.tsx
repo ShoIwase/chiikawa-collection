@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { CollectionItem } from "@/lib/types";
-import { CHARACTERS, PREFECTURES, OTHER_AREA_LABEL, WANT_TAG, FAV_TAG } from "@/lib/types";
+import { CHARACTERS, PREFECTURES, OTHER_AREA_LABEL, WANT_TAG, FAV_TAG, bucketOf } from "@/lib/types";
 
 export type SortKey = "name" | "area" | "character" | "owned-first" | "unowned-first";
 
@@ -28,10 +28,6 @@ type Props = {
   onSortKeyChange: (v: SortKey) => void;
   onClearAll: () => void;
 };
-
-function bucketOf(item: CollectionItem): string {
-  return item.Prefecture || OTHER_AREA_LABEL;
-}
 
 export default function FilterBar({
   items,

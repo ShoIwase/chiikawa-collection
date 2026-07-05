@@ -64,7 +64,7 @@ test.describe("レスポンシブ", () => {
 
     await expect(page.getByText("ちいかわコレクション")).toBeVisible();
     await expect(page.getByPlaceholder("名前・エリアで検索...")).toBeVisible();
-    const grid = page.locator(".grid");
+    const grid = page.locator(".grid").first();
     await expect(grid).toBeVisible();
   });
   test("モバイル: ログインフォームが収まる", async ({ page }) => {
@@ -96,7 +96,7 @@ test.describe("レスポンシブ", () => {
     await page.goto("/collection/");
 
     await expect(page.getByText("ちいかわコレクション")).toBeVisible();
-    const grid = page.locator(".grid");
+    const grid = page.locator(".grid").first();
     await expect(grid).toBeVisible();
   });
 });
