@@ -11,7 +11,7 @@ test.describe("アクセシビリティ", () => {
   test("ログインページ: a11y違反なし", async ({ page }) => {
     await mockUnauthenticated(page);
     await page.goto("/login/");
-    await expect(page.getByLabel("ユーザー名")).toBeVisible();
+    await expect(page.getByLabel("パスワード")).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .disableRules(["color-contrast"]) // Tailwind の動的クラスはCI環境で誤検知が多い
@@ -36,11 +36,7 @@ test.describe("アクセシビリティ", () => {
     await mockApi(page);
     await page.goto("/login/");
 
-    await page.keyboard.press("Tab");
-    await expect(page.getByLabel("ユーザー名")).toBeFocused();
-
-    await page.keyboard.type("testuser");
-    await page.keyboard.press("Tab");
+    // パスワード欄は autoFocus されているのでそのまま入力できる
     await expect(page.getByLabel("パスワード")).toBeFocused();
 
     await page.keyboard.type("password");
@@ -137,7 +133,6 @@ test.describe("ローディング状態", () => {
     });
 
     await page.goto("/login/");
-    await page.getByLabel("ユーザー名").fill("testuser");
     await page.getByLabel("パスワード").fill("password");
     await page.getByRole("button", { name: "ログイン" }).click();
 
@@ -195,7 +190,6 @@ test.describe("視覚フィードバック", () => {
   test("エラー時に赤いメッセージが表示される", async ({ page }) => {
     await mockUnauthenticated(page);
     await page.goto("/login/");
-    await page.getByLabel("ユーザー名").fill("wronguser");
     await page.getByLabel("パスワード").fill("wrongpass");
     await page.getByRole("button", { name: "ログイン" }).click();
 
