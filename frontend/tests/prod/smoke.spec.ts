@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
 
-const USERNAME = process.env.CHIIKAWA_TEST_USERNAME ?? "e2e-test";
 const PASSWORD = process.env.CHIIKAWA_TEST_PASSWORD ?? "";
 
 test.beforeAll(() => {
@@ -12,13 +11,11 @@ test.beforeAll(() => {
 // ---------------------------------------------------------------------------
 test("ログインページが表示される", async ({ page }) => {
   await page.goto("/login/");
-  await expect(page.getByLabel("ユーザー名")).toBeVisible();
   await expect(page.getByLabel("パスワード")).toBeVisible();
 });
 
 test("ログイン → コレクションページが開く", async ({ page }) => {
   await page.goto("/login/");
-  await page.getByLabel("ユーザー名").fill(USERNAME);
   await page.getByLabel("パスワード").fill(PASSWORD);
   await page.getByRole("button", { name: "ログイン" }).click();
 
@@ -33,7 +30,6 @@ test("未認証で /collection/ にアクセスすると /login/ にリダイレ
 
 test("ログイン済みで /login/ に戻っても /collection/ にリダイレクト", async ({ page }) => {
   await page.goto("/login/");
-  await page.getByLabel("ユーザー名").fill(USERNAME);
   await page.getByLabel("パスワード").fill(PASSWORD);
   await page.getByRole("button", { name: "ログイン" }).click();
   await expect(page).toHaveURL(/\/collection\//, { timeout: 30_000 });
@@ -44,7 +40,6 @@ test("ログイン済みで /login/ に戻っても /collection/ にリダイレ
 
 test("ログアウトで /login/ にリダイレクト", async ({ page }) => {
   await page.goto("/login/");
-  await page.getByLabel("ユーザー名").fill(USERNAME);
   await page.getByLabel("パスワード").fill(PASSWORD);
   await page.getByRole("button", { name: "ログイン" }).click();
   await expect(page).toHaveURL(/\/collection\//, { timeout: 30_000 });
@@ -58,7 +53,6 @@ test("ログアウトで /login/ にリダイレクト", async ({ page }) => {
 // ---------------------------------------------------------------------------
 test("アイテム一覧と所持カウントが表示される", async ({ page }) => {
   await page.goto("/login/");
-  await page.getByLabel("ユーザー名").fill(USERNAME);
   await page.getByLabel("パスワード").fill(PASSWORD);
   await page.getByRole("button", { name: "ログイン" }).click();
   await expect(page).toHaveURL(/\/collection\//, { timeout: 30_000 });
@@ -69,7 +63,6 @@ test("アイテム一覧と所持カウントが表示される", async ({ page 
 
 test("アイテム画像が実際に表示される（二重パスなし）", async ({ page }) => {
   await page.goto("/login/");
-  await page.getByLabel("ユーザー名").fill(USERNAME);
   await page.getByLabel("パスワード").fill(PASSWORD);
   await page.getByRole("button", { name: "ログイン" }).click();
   await expect(page).toHaveURL(/\/collection\//, { timeout: 30_000 });
@@ -89,7 +82,6 @@ test("アイテム画像が実際に表示される（二重パスなし）", as
 
 test("アイテムトグル: 所持ON → OFF が反映される", async ({ page }) => {
   await page.goto("/login/");
-  await page.getByLabel("ユーザー名").fill(USERNAME);
   await page.getByLabel("パスワード").fill(PASSWORD);
   await page.getByRole("button", { name: "ログイン" }).click();
   await expect(page).toHaveURL(/\/collection\//, { timeout: 30_000 });
@@ -116,7 +108,6 @@ test("アイテムトグル: 所持ON → OFF が反映される", async ({ page
 // ---------------------------------------------------------------------------
 test("テキスト検索でアイテムが絞り込まれる", async ({ page }) => {
   await page.goto("/login/");
-  await page.getByLabel("ユーザー名").fill(USERNAME);
   await page.getByLabel("パスワード").fill(PASSWORD);
   await page.getByRole("button", { name: "ログイン" }).click();
   await expect(page).toHaveURL(/\/collection\//, { timeout: 30_000 });
@@ -137,7 +128,6 @@ test("テキスト検索でアイテムが絞り込まれる", async ({ page }) 
 
 test("「未所持のみ」フィルターで絞り込まれる", async ({ page }) => {
   await page.goto("/login/");
-  await page.getByLabel("ユーザー名").fill(USERNAME);
   await page.getByLabel("パスワード").fill(PASSWORD);
   await page.getByRole("button", { name: "ログイン" }).click();
   await expect(page).toHaveURL(/\/collection\//, { timeout: 30_000 });
@@ -166,7 +156,6 @@ test("「未所持のみ」フィルターで絞り込まれる", async ({ page 
 // ---------------------------------------------------------------------------
 test("verifyページ: 一括確定ボタンがモーダル内に表示される", async ({ page }) => {
   await page.goto("/login/");
-  await page.getByLabel("ユーザー名").fill(USERNAME);
   await page.getByLabel("パスワード").fill(PASSWORD);
   await page.getByRole("button", { name: "ログイン" }).click();
   await expect(page).toHaveURL(/\/collection\//, { timeout: 30_000 });

@@ -28,7 +28,6 @@ jobs:
       - name: Run smoke tests
         working-directory: frontend
         env:
-          CHIIKAWA_TEST_USERNAME: e2e-test
           CHIIKAWA_TEST_PASSWORD: ${{ secrets.CHIIKAWA_TEST_PASSWORD }}
         run: npx playwright test --config=playwright.prod.config.ts
 
