@@ -87,20 +87,20 @@ test("アイテムトグル: 所持ON → OFF が反映される", async ({ page
   await expect(page).toHaveURL(/\/collection\//, { timeout: 30_000 });
   await expect(page.getByText(/\d+ \/ \d+ 個所持/)).toBeVisible({ timeout: 30_000 });
 
-  // カード構造: 外側div(ring-pink-400) > zoom button(img) + toggle button(テキスト)
-  // toggle ボタンの親 div で ring-pink-400 を確認する
+  // トグルは即保存されず「未保存」扱い（琥珀色リング）になり、保存ボタンで確定する仕様
   const toggleBtn = page.getByRole("button", { name: /の所持をトグル/ }).first();
   const cardDiv = toggleBtn.locator("..");
-  const wasOwned = await cardDiv.evaluate((el) => el.classList.contains("ring-pink-400"));
   await toggleBtn.click();
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(500);
 
-  const isOwned = await cardDiv.evaluate((el) => el.classList.contains("ring-pink-400"));
-  expect(isOwned).toBe(!wasOwned);
+  const isDirty = await cardDiv.evaluate((el) => el.classList.contains("ring-amber-400"));
+  expect(isDirty).toBe(true);
 
-  // 元に戻す
+  // 元に戻す（保存しないので変更は破棄される）
   await toggleBtn.click();
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(500);
+  const stillDirty = await cardDiv.evaluate((el) => el.classList.contains("ring-amber-400"));
+  expect(stillDirty).toBe(false);
 });
 
 // ---------------------------------------------------------------------------
@@ -138,14 +138,15 @@ test("「未所持のみ」フィルターで絞り込まれる", async ({ page 
   const totalBefore = await page.getByRole("button").filter({ has: page.locator("img") }).count();
   expect(totalBefore).toBeGreaterThan(0);
 
-  // FilterBar はエリア種別→タグに変更済み。代わりに「未所持のみ」チェックボックスでフィルターをテスト
-  await page.getByLabel("未所持のみ").check();
+  // FilterBar は折りたたみ式。「絞り込み」を開いてから「未所持のみ」トグルボタンを押す
+  await page.getByRole("button", { name: "絞り込み" }).click();
+  await page.getByRole("button", { name: "未所持のみ", exact: true }).click();
   await page.waitForTimeout(500);
 
   const filteredCount = await page.getByRole("button").filter({ has: page.locator("img") }).count();
   expect(filteredCount).toBeLessThanOrEqual(totalBefore);
 
-  await page.getByRole("button", { name: "クリア" }).click();
+  await page.getByRole("button", { name: "すべてクリア" }).click();
   await page.waitForTimeout(300);
   const restoredCount = await page.getByRole("button").filter({ has: page.locator("img") }).count();
   expect(restoredCount).toBe(totalBefore);
