@@ -7,6 +7,8 @@
 - **frontend/** — Next.js 15 (App Router) + React 19 + Tailwind + AWS Amplify(Cognito認証)。Playwright e2e。
 - **lambda/api/** — Java 21 Lambda（SnapStart）。API Gateway HTTP API + Cognito JWT。
 - **lambda/scraper/** — Python 3.12 Lambda。元サイトを巡回し画像解析して DynamoDB に投入。EventBridge で毎日 9:00 JST 実行。
+- **lambda/scanner/** — Python 3.12 Lambda。ユーザーが撮影/選択した写真からキャラ・地域・商品を認識し、
+  該当する `ChiikawaMaster` アイテムを返す（`POST /scan`）。詳細は後述の「写真スキャン機能」を参照。
 - **terraform/** — DynamoDB・S3・CloudFront・Cognito 等の基盤。
 - **template.yaml** — SAM（Lambda / API Gateway / スケジュール）。
 
@@ -26,6 +28,8 @@
   申請は Bedrock コンソールの **Playground / Model catalog** から行う（提出後15〜30分で有効）。
 - IAM権限は `template.yaml` の scraper ポリシーに `bedrock:InvokeModel`（inference-profile ARN）を付与済み。
 - 失敗の典型: `ResourceNotFoundException: Model use case details have not been submitted` → FTU未提出。
+- `lambda/scanner`（ユーザー写真スキャン）は別モデル `jp.anthropic.claude-sonnet-4-5-20250929-v1:0` を使用。
+  詳細は後述の「写真スキャン機能」を参照。
 
 ## データモデル: DynamoDB `ChiikawaMaster`
 - PK=`Category`("KeyChain")、SK=`ItemName`。
@@ -59,12 +63,68 @@
 - `Tags` は新規作成時のみ `{キャラ, 地名}` を自動付与。再実行は `SourceImageId` で商品単位スキップするため
   手動編集タグは保全される。
 
+## 写真スキャン機能（lambda/scanner）
+コレクション画面の「📷 スキャン」から、手持ちのキーホルダーを撮影 or 保存済み写真から選択して
+一括で所持登録できる。フロントは `ScanModal.tsx`、バックエンドは `POST /scan`（`chiikawa-scanner` Lambda）。
+
+### 抽出（Bedrock）
+- `handler.py` が画像を Bedrock に渡し、`{character, area, motif}` の**構造化JSON配列**で
+  キャラ・地域・ご当地要素を抽出させる。
+  - `area`/`motif` は地名を除いたモチーフを分離して返す想定だが、「大阪城」「大阪のおばちゃん」
+    「ニデック京都タワー」のように**地名とモチーフが不可分な商品が実在する**ため、その場合は
+    `area` を空にして `motif` に名称全体を入れるようプロンプトで指示している。
+  - 旧形式（`["大阪 たこ焼"]` のような文字列配列）が返っても後方互換でパースする。
+  - `maxTokens` は 2000（500だと10件強で打ち切られ、JSON配列が閉じずに**全件ロスト＝0件**になる
+    致命的な経路があった。過去にこれが本番の「スキャンしても何も出ない」の原因になったことがある）。
+  - `temperature=0`（OCRなので決定的にする）。
+- 画像は `MAX_PX=1600` にリサイズしてから送信（frontend `ScanModal.tsx`）。**これは意図的に据え置き**：
+  `claude-sonnet-4-5` は高解像度ビジョン非対応で、長辺 1568px 超はモデル側でダウンサンプルされるため
+  1600 以上に上げても情報量は増えない。タグの小さな文字の認識精度を上げたい場合は、まずモデルを
+  高解像度対応（Opus 4.7+ / Sonnet 5 系、2576px 対応）に変更することを検討する。
+
+### 照合（lambda/scanner/matcher.py）
+AWS 非依存の純粋関数群。DynamoDB や Bedrock を一切呼ばないので `pytest` だけで検証できる。
+- `item_core()` — `ItemName` から商品名コアを取り出す（`{キャラ}　{商品名}　ダイカットキーホルダー`
+  の逆変換）。キャラ名は DB の `Motif` 属性を優先し、無ければ既知キャラ名（ちいかわ/ハチワレ/うさぎ）
+  で剥がす。フロントの `format.ts` の `splitItemDisplay()` と対のロジックなので、**命名規約を変える
+  ときは両方直す**こと。
+- `extract_areas()` — 認識テキストに含まれる `AreaName`（DB の実在集合）を**左から最長一致**で
+  抽出する。「東京都」から「東京」を先に取ることで、残りの「都」から「京都」が誤マッチしないように
+  している（`"京都" in "東京都"` は素朴な部分一致だと真になる）。47都道府県のハードコードリストは
+  持たず、DB の実在地名から動的に集合を作る（`lambda/scraper/area_mapping.py` は参照しない —
+  SAM のパッケージ境界が別なのと、DB に無い地名を持ち込むと偽陽性が増えるため）。
+- スコアリング：モチーフが商品名コアに完全包含 → `exact`。文字bigramのDice係数で近い → `partial`。
+  地域しか特定できない → `area`（この場合はその地域の全商品を候補として返す）。
+  スコア2以上のコアが1つでもあれば、そのコアだけに絞り込んでから最後にキャラで1件まで絞る。
+- レスポンスの `ScanMatchedItem` は `itemDetail`（商品名コア）と `confidence`
+  （`exact`/`partial`/`area`）を持つ。フロントは `confidence === "area"` のグループを折りたたみ・
+  初期チェック外にして、地域だけの推測が誤って所持登録されないようにしている。
+
+### フロント（ScanModal.tsx）
+- 写真選択用の `<input>` は **カメラ用とライブラリ用の2本**に分けてある。`capture="environment"`
+  を1本だけに付けるとカメラが強制起動し、保存済み写真から選べなくなる端末があるため。
+
+### テスト
+- `lambda/scanner/tests/test_matcher.py` — マッチングの回帰テスト（東京都/京都の誤マッチ防止、
+  地域一体型商品、旧バグ「地名+モチーフ完全一致でしか照合できず0件になる」の再現テストを含む）。
+- `lambda/scanner/tests/test_handler.py` — Bedrock 応答パース（JSON フェンス・切り詰め時の
+  サルベージ・旧形式の後方互換）。
+- CI は `deploy-sam.yml` の `test-python` が `strategy.matrix.dir: [lambda/scraper, lambda/scanner]`
+  で両方実行する。
+
 ## デプロイ
 - `main` への push で GitHub Actions が自動デプロイ:
   - `lambda/**` `template.yaml` 変更 → `deploy-sam.yml`（Java/Pythonテスト → SAM deploy）
   - `frontend/**` 変更 → `deploy-frontend.yml`
   - `terraform/**` → `deploy-infra.yml`
-- ローカルテスト: `cd lambda/scraper && python3 -m pytest tests/ -q` / `cd frontend && npx playwright test`
+- ローカルテスト:
+  `cd lambda/scraper && python3 -m pytest tests/ -q` /
+  `cd lambda/scanner && python3 -m pytest tests/ -q` /
+  `cd frontend && npx playwright test`
+- Java（`lambda/api`）のテストは `Db` の定数が `static final` でクラス初期化時に一度だけ解決される
+  ため、テストクラスの実行順に依存しないよう `pom.xml` の surefire に `systemPropertyVariables`
+  （`MASTER_TABLE`/`COLLECTION_TABLE`/`FAMILY_ID`）と `runOrder=alphabetical` を固定している。
+  ここを外すと、1ヶ月 `lambda/**` に変更が無いだけで実行順が変わって突然テストが落ちることがある。
 
 ## 手動再取得・洗い替え手順
 1. （必要なら）`bar504-admin` にスイッチロール

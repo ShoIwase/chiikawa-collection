@@ -59,6 +59,7 @@ chiikawa-collection/
 |---|---|
 | Lambda `chiikawa-api` | Java 21 / SnapStart / alias `live` |
 | Lambda `chiikawa-scraper` | Python 3.12 / 毎日 9:00 JST 起動 |
+| Lambda `chiikawa-scanner` | Python 3.12 / `POST /scan`。ユーザー写真から Bedrock でキャラ・地域を認識し、DynamoDB と照合して返す |
 | API Gateway HTTP API | Cognito JWT 認証付き REST エンドポイント |
 | EventBridge ScheduleV2 | スクレイパーの定期実行トリガー |
 | IAM ロール (自動生成) | Lambda 実行権限 |
@@ -99,6 +100,14 @@ alias "live" ← バージョン管理で SnapStart が有効になる
     ├── GET  /items/pending  → DynamoDB Query (未確認アイテム)
     ├── PUT  /items/{name}/status → DynamoDB Update (所持フラグ)
     └── PUT  /items/{name}/verify → DynamoDB Update (エリア確定)
+
+[ブラウザ → 写真スキャン]
+    │ POST /scan (Authorization: Bearer <Cognito JWT>)
+    ▼
+[Lambda: chiikawa-scanner (Python 3.12)]
+    │
+    ├── Bedrock (Claude) で写真からキャラ/地域/商品を抽出
+    └── ChiikawaMaster を Scan して照合し、該当アイテムを返す
 
 [EventBridge: cron(0 0 * * ? *)] → 毎日 9:00 JST
     ▼
@@ -171,6 +180,8 @@ Cognito Hosted UI (OAuth リダイレクト) は使用しない。
 - **フィルター**: AreaType (都道府県・市町村・温泉地・海外) で絞り込み → AreaName で絞り込み
 - **検索**: アイテム名・モチーフのテキスト検索
 - **切替**: タップで「未所持(グレー)」⇔「所持(カラー)」切替 (楽観的更新)
+- **写真スキャン**: カメラ撮影 or 保存済み写真から `POST /scan` に送信し、AI が認識したアイテムを
+  まとめて所持状態に反映（`chiikawa-scanner` Lambda。詳細は `CLAUDE.md`）
 
 ---
 

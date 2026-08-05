@@ -11,6 +11,8 @@
   ちいかわ・ハチワレ・うさぎを検出。1商品＝最大3エントリに分割
 - **地域の自動判定と集約**：画像内の「○○限定」から地域を抽出。市区町村は親の都道府県へ集約され、
   「千葉県」を選べば市川市の商品も表示される
+- **写真スキャンで一括登録**：手持ちのキーホルダーをカメラ撮影 or 保存済み写真から選択すると、
+  AI がキャラ・地域・商品を認識して該当アイテムを提示。チェックして所持状態に反映できる
 - **所持管理**：家族共有で所持/未所持をチェック（ログイン者によらず共有）。タップは未保存の変更として
   溜まり、**保存ボタンでまとめて確定**（誤タップ防止。保存するまでサーバーに反映されない）
 - **フィルタ**：都道府県 → 市区町村 の2段フィルタ、キャラクター絞り込み、フリーワード検索、
@@ -59,7 +61,8 @@ chiikawa-collection/
 │   └── tests/           # Playwright e2e
 ├── lambda/
 │   ├── api/             # Java 21 Lambda（GET /items, status, verify, tags）
-│   └── scraper/         # Python スクレイパー（handler.py, scraper.py, area_mapping.py）
+│   ├── scraper/         # Python スクレイパー（handler.py, scraper.py, area_mapping.py）
+│   └── scanner/         # Python 写真スキャン Lambda（POST /scan, handler.py, matcher.py）
 ├── terraform/         # DynamoDB / S3 / CloudFront / Cognito
 ├── template.yaml      # SAM（Lambda・API Gateway・スケジュール）
 ├── .github/workflows/ # deploy-sam / deploy-frontend / deploy-infra / run-scraper
@@ -92,6 +95,10 @@ npx playwright test    # e2e テスト
 
 # スクレイパー（Python）
 cd lambda/scraper
+python3 -m pytest tests/ -q
+
+# 写真スキャン（Python）
+cd lambda/scanner
 python3 -m pytest tests/ -q
 
 # API（Java）
