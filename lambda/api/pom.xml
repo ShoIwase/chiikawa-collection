@@ -97,6 +97,18 @@
           <includes>
             <include>**/*Test.java</include>
           </includes>
+          <!-- Db の定数は static final でクラス初期化時に一度だけ解決される。
+               テスト側の @BeforeAll で System.setProperty しても、別のテストクラスが
+               先に Db をロードすると空文字で固定されてしまう（Surefire は同一JVMを
+               使い回すため以降ずっと空のまま）。fork JVM 起動時に渡して順序非依存にする。
+               値は samconfig.toml の本番パラメータと揃えること。 -->
+          <systemPropertyVariables>
+            <MASTER_TABLE>ChiikawaMaster</MASTER_TABLE>
+            <COLLECTION_TABLE>UserCollection</COLLECTION_TABLE>
+            <FAMILY_ID>shoiwase</FAMILY_ID>
+          </systemPropertyVariables>
+          <!-- 既定の filesystem 順はOS依存で不定。再現性のため固定する -->
+          <runOrder>alphabetical</runOrder>
         </configuration>
       </plugin>
       <plugin>
