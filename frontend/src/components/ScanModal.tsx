@@ -314,7 +314,7 @@ export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
                                         // eslint-disable-next-line @next/next/no-img-element
                                         <img
                                           src={`${CLOUDFRONT_URL}${item.imageUrl}`}
-                                          alt={`${item.itemDetail} ${item.motif}`}
+                                          alt={[item.itemDetail, item.motif].filter(Boolean).join(" ")}
                                           className="w-9 h-9 rounded object-cover flex-shrink-0 bg-gray-100"
                                         />
                                       )}

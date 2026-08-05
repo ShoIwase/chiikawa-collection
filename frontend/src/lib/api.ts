@@ -72,7 +72,23 @@ export async function scanPhoto(imageBase64: string, mimeType: string): Promise<
     body: JSON.stringify({ image: imageBase64, mimeType }),
   });
   if (!res.ok) throw new Error(`POST /scan failed: ${res.status}`);
-  return res.json();
+  const body: { areas?: string[]; matched?: Partial<ScanMatchedItem>[] } = await res.json();
+
+  // itemDetail / confidence は scanner Lambda 側の新フィールド。
+  // フロントだけ先にデプロイされた状態でも壊れないよう、ここで既定値を補って
+  // 呼び出し側には常に揃った形で渡す。
+  return {
+    areas: body.areas ?? [],
+    matched: (body.matched ?? []).map((item) => ({
+      itemName: item.itemName ?? "",
+      itemDetail: item.itemDetail ?? "",
+      areaName: item.areaName ?? "",
+      motif: item.motif ?? "",
+      prefecture: item.prefecture ?? "",
+      imageUrl: item.imageUrl ?? "",
+      confidence: item.confidence ?? "exact",
+    })),
+  };
 }
 
 export async function verifyItem(
