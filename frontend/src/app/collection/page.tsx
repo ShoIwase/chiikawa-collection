@@ -93,8 +93,11 @@ export default function CollectionPage() {
         await updateItemStatus(name, owned);
         succeeded.push(name);
       }
+      const now = new Date().toISOString();
       setItems((prev) =>
-        prev.map((i) => (i.ItemName in pending ? { ...i, Owned: pending[i.ItemName] } : i))
+        prev.map((i) =>
+          i.ItemName in pending ? { ...i, Owned: pending[i.ItemName], UpdatedAt: now } : i
+        )
       );
       setPending({});
     } catch {
@@ -170,7 +173,10 @@ export default function CollectionPage() {
 
   const handleScanUpdated = useCallback((updatedNames: string[]) => {
     const nameSet = new Set(updatedNames);
-    setItems((prev) => prev.map((i) => (nameSet.has(i.ItemName) ? { ...i, Owned: true } : i)));
+    const now = new Date().toISOString();
+    setItems((prev) =>
+      prev.map((i) => (nameSet.has(i.ItemName) ? { ...i, Owned: true, UpdatedAt: now } : i))
+    );
   }, []);
 
   const displayItems = useMemo(
