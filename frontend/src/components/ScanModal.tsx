@@ -28,7 +28,11 @@ async function resizeAndEncode(file: File): Promise<{ base64: string; mimeType: 
       const base64 = canvas.toDataURL(mimeType).split(",")[1];
       resolve({ base64, mimeType });
     };
-    img.onerror = reject;
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      // HEIC など、ブラウザがデコードできない形式で発生する
+      reject(new Error("この画像は読み込めませんでした。別の写真をお試しください"));
+    };
     img.src = url;
   });
 }
@@ -39,45 +43,69 @@ const CHAR_ORDER: Record<string, number> = { ちいかわ: 0, ハチワレ: 1, �
 const CLOUDFRONT_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL ?? "";
 
 export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
   const [areas, setAreas] = useState<string[]>([]);
   const [matched, setMatched] = useState<ScanMatchedItem[]>([]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
-  const handleFile = useCallback(async (file: File) => {
-    setScanError("");
+  const resetResult = useCallback(() => {
     setAreas([]);
     setMatched([]);
     setChecked(new Set());
-
-    const objectUrl = URL.createObjectURL(file);
-    setPreview(objectUrl);
-    setScanning(true);
-
-    try {
-      const { base64, mimeType } = await resizeAndEncode(file);
-      const result = await scanPhoto(base64, mimeType);
-      setAreas(result.areas);
-
-      const sorted = [...result.matched].sort(
-        (a, b) =>
-          a.areaName.localeCompare(b.areaName, "ja") ||
-          (CHAR_ORDER[a.motif] ?? 9) - (CHAR_ORDER[b.motif] ?? 9)
-      );
-      setMatched(sorted);
-      // 未所持のものだけ初期チェック
-      setChecked(new Set(sorted.filter((i) => !ownedNames.has(i.itemName)).map((i) => i.itemName)));
-    } catch (e) {
-      setScanError(e instanceof Error ? e.message : "スキャンに失敗しました");
-    } finally {
-      setScanning(false);
-    }
+    setCollapsed(new Set());
   }, []);
+
+  const handleFile = useCallback(
+    async (file: File) => {
+      setScanError("");
+      resetResult();
+
+      const objectUrl = URL.createObjectURL(file);
+      setPreview(objectUrl);
+      setScanning(true);
+
+      try {
+        const { base64, mimeType } = await resizeAndEncode(file);
+        const result = await scanPhoto(base64, mimeType);
+        setAreas(result.areas);
+
+        const sorted = [...result.matched].sort(
+          (a, b) =>
+            a.areaName.localeCompare(b.areaName, "ja") ||
+            a.itemDetail.localeCompare(b.itemDetail, "ja") ||
+            (CHAR_ORDER[a.motif] ?? 9) - (CHAR_ORDER[b.motif] ?? 9)
+        );
+        setMatched(sorted);
+
+        // 商品まで特定できた未所持のものだけ初期チェック。
+        // 地域しか読めていない候補（confidence: "area"）は誤登録を防ぐため外す。
+        setChecked(
+          new Set(
+            sorted
+              .filter((i) => i.confidence !== "area" && !ownedNames.has(i.itemName))
+              .map((i) => i.itemName)
+          )
+        );
+        // 確度の低い地域グループは畳んでおく
+        const lowAreas = [...new Set(sorted.map((i) => i.areaName))].filter((area) =>
+          sorted.filter((i) => i.areaName === area).every((i) => i.confidence === "area")
+        );
+        setCollapsed(new Set(lowAreas));
+      } catch (e) {
+        setScanError(e instanceof Error ? e.message : "スキャンに失敗しました");
+      } finally {
+        setScanning(false);
+      }
+    },
+    [ownedNames, resetResult]
+  );
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,6 +114,14 @@ export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
     },
     [handleFile]
   );
+
+  const clearPhoto = () => {
+    setPreview(null);
+    setScanError("");
+    resetResult();
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (libraryInputRef.current) libraryInputRef.current.value = "";
+  };
 
   const toggleItem = (name: string) => {
     setChecked((prev) => {
@@ -96,13 +132,24 @@ export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
     });
   };
 
-  const toggleArea = (areaName: string) => {
-    const areaItems = matched.filter((i) => i.areaName === areaName).map((i) => i.itemName);
-    const allChecked = areaItems.every((n) => checked.has(n));
+  // 選択可能（未所持）なアイテム名だけをまとめて反転する
+  const toggleMany = (items: ScanMatchedItem[]) => {
+    const names = items.filter((i) => !ownedNames.has(i.itemName)).map((i) => i.itemName);
+    if (names.length === 0) return;
+    const allChecked = names.every((n) => checked.has(n));
     setChecked((prev) => {
       const next = new Set(prev);
-      if (allChecked) areaItems.forEach((n) => next.delete(n));
-      else areaItems.forEach((n) => next.add(n));
+      if (allChecked) names.forEach((n) => next.delete(n));
+      else names.forEach((n) => next.add(n));
+      return next;
+    });
+  };
+
+  const toggleCollapsed = (areaName: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(areaName)) next.delete(areaName);
+      else next.add(areaName);
       return next;
     });
   };
@@ -123,7 +170,7 @@ export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
     }
   };
 
-  // エリアごとにグループ化
+  // エリア → 商品 の2階層でグループ化する
   const groupedAreas = [...new Set(matched.map((i) => i.areaName))];
   const unownedCount = matched.filter((i) => !ownedNames.has(i.itemName)).length;
 
@@ -139,24 +186,26 @@ export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {/* 写真選択エリア */}
           {!preview ? (
-            <button
-              onClick={() => inputRef.current?.click()}
-              className="w-full border-2 border-dashed border-pink-200 rounded-xl py-10 text-center text-sm text-pink-400 hover:border-pink-400 hover:bg-pink-50 transition-colors"
-            >
-              写真を選択 / カメラで撮影
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => cameraInputRef.current?.click()}
+                className="border-2 border-dashed border-pink-200 rounded-xl py-8 text-center text-sm text-pink-400 hover:border-pink-400 hover:bg-pink-50 transition-colors"
+              >
+                📷<br />カメラで撮影
+              </button>
+              <button
+                onClick={() => libraryInputRef.current?.click()}
+                className="border-2 border-dashed border-pink-200 rounded-xl py-8 text-center text-sm text-pink-400 hover:border-pink-400 hover:bg-pink-50 transition-colors"
+              >
+                🖼️<br />写真を選ぶ
+              </button>
+            </div>
           ) : (
             <div className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={preview} alt="スキャン対象" className="w-full rounded-xl object-contain max-h-48" />
               <button
-                onClick={() => {
-                  setPreview(null);
-                  setAreas([]);
-                  setMatched([]);
-                  setChecked(new Set());
-                  if (inputRef.current) inputRef.current.value = "";
-                }}
+                onClick={clearPhoto}
                 className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full"
               >
                 別の写真
@@ -164,11 +213,20 @@ export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
             </div>
           )}
 
+          {/* カメラ起動用（capture 指定）と、保存済み写真から選ぶ用の2本立て。
+              capture を付けた input だけだと端末によっては写真ライブラリを開けない。 */}
           <input
-            ref={inputRef}
+            ref={cameraInputRef}
             type="file"
             accept="image/*"
             capture="environment"
+            className="hidden"
+            onChange={handleInputChange}
+          />
+          <input
+            ref={libraryInputRef}
+            type="file"
+            accept="image/*"
             className="hidden"
             onChange={handleInputChange}
           />
@@ -187,50 +245,92 @@ export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
           {!scanning && matched.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs text-gray-500">
-                {areas.length}エリアを認識 · 該当 {matched.length}件（未登録 {unownedCount}件）
+                {areas.length}件を認識 · 該当 {matched.length}件（未登録 {unownedCount}件）
               </p>
               {groupedAreas.map((areaName) => {
-                const items = matched.filter((i) => i.areaName === areaName);
-                const allChecked = items.every((i) => checked.has(i.itemName));
+                const areaItems = matched.filter((i) => i.areaName === areaName);
+                const products = [...new Set(areaItems.map((i) => i.itemDetail))];
+                const isCandidate = areaItems.every((i) => i.confidence === "area");
+                const selectable = areaItems.filter((i) => !ownedNames.has(i.itemName));
+                const allChecked =
+                  selectable.length > 0 && selectable.every((i) => checked.has(i.itemName));
+                const isCollapsed = collapsed.has(areaName);
+
                 return (
                   <div key={areaName} className="border border-gray-100 rounded-xl overflow-hidden">
-                    <button
-                      className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 text-left"
-                      onClick={() => toggleArea(areaName)}
-                    >
-                      <span className="text-sm font-medium text-gray-700">{areaName}</span>
-                      <span className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center ${allChecked ? "bg-pink-400 border-pink-400" : "border-gray-300"}`}>
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50">
+                      <button
+                        className="flex-1 flex items-center gap-2 text-left"
+                        onClick={() => toggleCollapsed(areaName)}
+                        aria-expanded={!isCollapsed}
+                      >
+                        <span className="text-xs text-gray-400">{isCollapsed ? "▶" : "▼"}</span>
+                        <span className="text-sm font-medium text-gray-700">{areaName}</span>
+                        {isCandidate && (
+                          <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
+                            地域のみ一致
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => toggleMany(areaItems)}
+                        aria-label={`${areaName}をまとめて選択`}
+                        aria-pressed={allChecked}
+                        disabled={selectable.length === 0}
+                        className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center disabled:opacity-40 ${allChecked ? "bg-pink-400 border-pink-400" : "border-gray-300"}`}
+                      >
                         {allChecked && <span className="text-white text-xs">✓</span>}
-                      </span>
-                    </button>
-                    <div className="divide-y divide-gray-50">
-                      {items.map((item) => {
-                        const alreadyOwned = ownedNames.has(item.itemName);
-                        return (
-                          <label key={item.itemName} className={`flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-gray-50 ${alreadyOwned ? "opacity-60" : ""}`}>
-                            <input
-                              type="checkbox"
-                              checked={checked.has(item.itemName)}
-                              onChange={() => toggleItem(item.itemName)}
-                              disabled={alreadyOwned}
-                              className="accent-pink-400"
-                            />
-                            {item.imageUrl && (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={`${CLOUDFRONT_URL}${item.imageUrl}`}
-                                alt={item.motif}
-                                className="w-9 h-9 rounded object-cover flex-shrink-0 bg-gray-100"
-                              />
-                            )}
-                            <span className="text-sm text-gray-600">{item.motif}</span>
-                            {alreadyOwned && (
-                              <span className="ml-auto text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">登録済み</span>
-                            )}
-                          </label>
-                        );
-                      })}
+                      </button>
                     </div>
+
+                    {!isCollapsed && (
+                      <div className="divide-y divide-gray-100">
+                        {products.map((detail) => {
+                          const productItems = areaItems.filter((i) => i.itemDetail === detail);
+                          return (
+                            <div key={detail}>
+                              <button
+                                onClick={() => toggleMany(productItems)}
+                                className="w-full text-left px-4 pt-2 pb-1 text-xs font-medium text-gray-500 hover:text-pink-500"
+                              >
+                                {detail || "（商品名なし）"}
+                              </button>
+                              <div className="divide-y divide-gray-50">
+                                {productItems.map((item) => {
+                                  const alreadyOwned = ownedNames.has(item.itemName);
+                                  return (
+                                    <label
+                                      key={item.itemName}
+                                      className={`flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-gray-50 ${alreadyOwned ? "opacity-60" : ""}`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={checked.has(item.itemName)}
+                                        onChange={() => toggleItem(item.itemName)}
+                                        disabled={alreadyOwned}
+                                        className="accent-pink-400"
+                                      />
+                                      {item.imageUrl && (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                          src={`${CLOUDFRONT_URL}${item.imageUrl}`}
+                                          alt={`${item.itemDetail} ${item.motif}`}
+                                          className="w-9 h-9 rounded object-cover flex-shrink-0 bg-gray-100"
+                                        />
+                                      )}
+                                      <span className="text-sm text-gray-600">{item.motif}</span>
+                                      {alreadyOwned && (
+                                        <span className="ml-auto text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">登録済み</span>
+                                      )}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -243,7 +343,7 @@ export default function ScanModal({ onClose, onUpdated, ownedNames }: Props) {
 
           {!scanning && preview && areas.length > 0 && matched.length === 0 && (
             <p className="text-sm text-gray-400 text-center py-2">
-              認識した地域: {areas.join("、")}（DBに該当なし）
+              認識した内容: {areas.join("、")}（DBに該当なし）
             </p>
           )}
         </div>

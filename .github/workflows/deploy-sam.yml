@@ -32,6 +32,9 @@ jobs:
 
   test-python:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [lambda/scraper, lambda/scanner]
     steps:
       - uses: actions/checkout@v4
 
@@ -40,11 +43,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install test dependencies
-        working-directory: lambda/scraper
+        working-directory: ${{ matrix.dir }}
         run: pip install -r requirements-dev.txt -q
 
       - name: Run Python tests
-        working-directory: lambda/scraper
+        working-directory: ${{ matrix.dir }}
         run: pytest tests/ -v --tb=short
 
   deploy:

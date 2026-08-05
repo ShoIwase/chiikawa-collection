@@ -47,12 +47,17 @@ export async function updateItemTags(itemName: string, tags: string[]): Promise<
   if (!res.ok) throw new Error(`PUT /items/${itemName}/tags failed: ${res.status}`);
 }
 
+// exact=商品まで確定 / partial=表記ゆれ込みで一致 / area=地域しか読めず候補止まり
+export type ScanConfidence = "exact" | "partial" | "area";
+
 export type ScanMatchedItem = {
   itemName: string;
+  itemDetail: string; // 商品名コア（例「大阪 たこ焼」）。キャラ名と商品種別を除いた部分
   areaName: string;
-  motif: string;
+  motif: string; // キャラ名（ちいかわ/ハチワレ/うさぎ）
   prefecture: string;
   imageUrl: string;
+  confidence: ScanConfidence;
 };
 
 export type ScanResult = {
