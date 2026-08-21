@@ -176,12 +176,21 @@ def download_image_to_s3(image_url: str, item_name: str) -> str:
     return upload_image_to_s3(data, item_name, content_type)
 
 
-# 商品画像はちいかわ(左)/ハチワレ(中)/うさぎ(右)の3キャラが横並び。
-# 各キャラのチャーム（柄）の中心は等分(0.167/0.5/0.833)ではなく中央寄りに位置する
-# （実測: 0.20 / 0.50 / 0.79 W）。柄を中心にした正方形で切り出す。
-_CHAR_X_CENTER = {"ちいかわ": 0.20, "ハチワレ": 0.50, "うさぎ": 0.79}
-_CROP_Y_CENTER = 0.55   # 柄の縦中心（鎖を上に、キャプションを下に外す）
-_CROP_SIDE_RATIO = 0.40  # 正方形の一辺（画像幅に対する比）
+# 商品画像はちいかわ(左)/ハチワレ(中)/うさぎ(右)の3キャラが横並び（元サイトは 700x600 固定）。
+# 全ページから30点サンプルして実測した各キャラの占有範囲（700px幅換算・名前ラベル込み）:
+#   ちいかわ x=64..245 / ハチワレ x=267..447 / うさぎ x=469..648
+#   （右上隅の装飾リボンが x=658.. にあるので、うさぎの右端はその手前で止める）
+# キャラ間には 20px 強の余白が必ずあるので、その中間で区切った「セル」を各キャラの
+# 切り出し可能範囲とし、窓は必ずセル内に収める。こうしないと隣のキャラの名前ラベル
+# （柄より横幅が広い）が左右の端に写り込む。
+# 値は (セル左端, セル右端, 柄の横中心) の画像幅に対する比。
+_CHAR_CELLS = {
+    "ちいかわ": (0.000, 0.366, 0.215),
+    "ハチワレ": (0.366, 0.654, 0.505),
+    "うさぎ": (0.654, 0.935, 0.792),
+}
+_CROP_Y_CENTER = 0.55   # 柄の縦中心（鎖を上に、名前ラベルとキャプションを下に外す）
+_CROP_SIDE_RATIO = 0.28  # 正方形の一辺（画像幅に対する比）。最も狭いセル(ハチワレ)に収まる幅
 
 
 def crop_character(image_data: bytes, content_type: str, character: str) -> bytes:
@@ -189,21 +198,25 @@ def crop_character(image_data: bytes, content_type: str, character: str) -> byte
 
     一覧でどのキャラのエントリか一目で分かるようにするための加工。
     正方形なのでカードの正方形サムネに柄がきれいに収まる。
+    切り出し窓は該当キャラのセル内にクランプするので、隣のキャラが端に写り込まない。
     対象外キャラや失敗時は元画像をそのまま返す（フォールバック）。
     """
-    cx_ratio = _CHAR_X_CENTER.get(character)
-    if cx_ratio is None:
+    cell = _CHAR_CELLS.get(character)
+    if cell is None:
         return image_data
+    left_ratio, right_ratio, cx_ratio = cell
     try:
         import io
         from PIL import Image
 
         im = Image.open(io.BytesIO(image_data))
         width, height = im.size
-        side = min(int(width * _CROP_SIDE_RATIO), height)
+        cell_left = int(width * left_ratio)
+        cell_right = int(width * right_ratio)
+        side = min(int(width * _CROP_SIDE_RATIO), cell_right - cell_left, height)
         cx = int(width * cx_ratio)
         cy = int(height * _CROP_Y_CENTER)
-        left = max(0, min(width - side, cx - side // 2))
+        left = max(cell_left, min(cell_right - side, cx - side // 2))
         top = max(0, min(height - side, cy - side // 2))
         crop = im.crop((left, top, left + side, top + side))
 

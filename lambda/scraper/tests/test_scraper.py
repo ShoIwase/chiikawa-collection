@@ -323,15 +323,29 @@ class TestAnalyzeImage:
 
 class TestCropCharacter:
 
+    # 実測レイアウト(700x600): 各キャラの占有範囲は名前ラベル込みで
+    # ちいかわ 64..245 / ハチワレ 267..447 / うさぎ 469..648。
+    _CHARMS = [
+        ("ちいかわ", (255, 0, 0), 0.215),
+        ("ハチワレ", (0, 255, 0), 0.505),
+        ("うさぎ", (0, 0, 255), 0.792),
+    ]
+    _LABEL_SPANS = [(64, 245), (267, 447), (469, 648)]
+
     def _three_charm_png(self) -> bytes:
-        """実際の柄中心(0.20/0.50/0.79 W, 0.55 H)に色付き四角を置いた 700x600 PNG。"""
+        """実測レイアウトを模した 700x600 PNG。
+
+        柄(120px角)と、その下に柄より横幅の広い名前ラベル(実測の占有範囲いっぱい)を置く。
+        ラベルが広いので、切り出しが甘いと隣のキャラのラベルが端に写り込む。
+        """
         Image = pytest.importorskip("PIL.Image")
         import io
         im = Image.new("RGB", (700, 600), (255, 255, 255))  # 白背景
         cy = int(600 * 0.55)
-        for cx_ratio, color in [(0.20, (255, 0, 0)), (0.50, (0, 255, 0)), (0.79, (0, 0, 255))]:
+        for (_, color, cx_ratio), (x0, x1) in zip(self._CHARMS, self._LABEL_SPANS):
             cx = int(700 * cx_ratio)
             im.paste(color, (cx - 60, cy - 60, cx + 60, cy + 60))  # 120x120 の柄
+            im.paste(color, (x0, 428, x1 + 1, 464))               # 名前ラベル(柄より広い)
         buf = io.BytesIO(); im.save(buf, format="PNG")
         return buf.getvalue()
 
@@ -339,12 +353,23 @@ class TestCropCharacter:
         Image = pytest.importorskip("PIL.Image")
         import io
         data = self._three_charm_png()
-        side = int(700 * 0.40)  # 280
+        side = int(700 * 0.28)  # 196
         # 各キャラの柄中心が切り抜きの中心(=側長/2)に来て、その色になる
-        for character, color in [("ちいかわ", (255, 0, 0)), ("ハチワレ", (0, 255, 0)), ("うさぎ", (0, 0, 255))]:
+        for character, color, _ in self._CHARMS:
             crop = Image.open(io.BytesIO(crop_character(data, "image/png", character))).convert("RGB")
             assert crop.size == (side, side)  # 正方形
             assert crop.getpixel((side // 2, side // 2)) == color
+
+    def test_crop_excludes_neighbor_characters(self):
+        """隣のキャラ（柄・名前ラベルとも）が切り抜きの中に1pxも入らないこと。"""
+        Image = pytest.importorskip("PIL.Image")
+        import io
+        data = self._three_charm_png()
+        for character, color, _ in self._CHARMS:
+            crop = Image.open(io.BytesIO(crop_character(data, "image/png", character))).convert("RGB")
+            others = {c for _, c, _ in self._CHARMS} - {color}
+            used = {rgb for _, rgb in crop.getcolors(maxcolors=crop.width * crop.height)}
+            assert others.isdisjoint(used), f"{character} の切り抜きに隣のキャラが写り込んでいる"
 
     def test_unknown_character_returns_original(self):
         data = b"\xff\xd8\xff"
