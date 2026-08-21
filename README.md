@@ -9,6 +9,9 @@
 - **自動収集**：販売サイトを毎日巡回し、ダイカットキーホルダー商品を自動取り込み
 - **画像からキャラ判定**：商品画像を AI（Amazon Bedrock / Claude）で解析し、写っている
   ちいかわ・ハチワレ・うさぎを検出。1商品＝最大3エントリに分割
+- **キャラ別のサムネ切り出し**：元画像は3キャラが横並びなので、一覧で判別できるよう
+  各キャラの柄と名前ラベルだけを切り出して保存。隣のキャラが端に写り込まないよう、
+  切り出し窓はキャラごとの領域内にクランプし、足りない横幅は白パディングで正方形に整える
 - **地域の自動判定と集約**：画像内の「○○限定」から地域を抽出。市区町村は親の都道府県へ集約され、
   「千葉県」を選べば市川市の商品も表示される
 - **写真スキャンで一括登録**：手持ちのキーホルダーをカメラ撮影 or 保存済み写真から選択すると、
@@ -65,6 +68,7 @@ chiikawa-collection/
 │   ├── scraper/         # Python スクレイパー（handler.py, scraper.py, area_mapping.py）
 │   └── scanner/         # Python 写真スキャン Lambda（POST /scan, handler.py, matcher.py）
 ├── terraform/         # DynamoDB / S3 / CloudFront / Cognito
+├── scripts/           # 運用スクリプト（recrop_images.py: 既存画像の切り出し直し）
 ├── template.yaml      # SAM（Lambda・API Gateway・スケジュール）
 ├── .github/workflows/ # deploy-sam / deploy-frontend / deploy-infra / run-scraper
 └── CLAUDE.md          # 運用ドキュメント（AWS権限・Bedrock・洗い替え手順など）
@@ -119,6 +123,14 @@ mvn test
 
 スクレイパーの手動実行は GitHub Actions の **Run Scraper (Manual)** から、または
 AWS CLI で `chiikawa-scraper` Lambda を invoke する（詳細は [CLAUDE.md](./CLAUDE.md)）。
+
+画像の切り出しルールを変えたときは、S3 の既存画像も貼り替える必要がある
+（スクレイパーは `SourceImageId` で商品ごとスキップするため再取得されない）。
+
+```bash
+python3 scripts/recrop_images.py           # dry-run（対象を出すだけ）
+python3 scripts/recrop_images.py --apply   # 上書き ＋ CloudFront 無効化
+```
 
 ## 運用
 
