@@ -58,7 +58,7 @@ chiikawa-collection/
 | リソース | 説明 |
 |---|---|
 | Lambda `chiikawa-api` | Java 21 / SnapStart / alias `live` |
-| Lambda `chiikawa-scraper` | Python 3.12 / 毎日 9:00 JST 起動 |
+| Lambda `chiikawa-scraper` | Python 3.12 / 毎週月曜 9:00 JST 起動 |
 | Lambda `chiikawa-scanner` | Python 3.12 / `POST /scan`。ユーザー写真から Bedrock でキャラ・地域を認識し、DynamoDB と照合して返す |
 | API Gateway HTTP API | Cognito JWT 認証付き REST エンドポイント |
 | EventBridge ScheduleV2 | スクレイパーの定期実行トリガー |
@@ -110,7 +110,7 @@ alias "live" ← バージョン管理で SnapStart が有効になる
     ├── Bedrock (Claude) で写真からキャラ/地域/商品を抽出
     └── ChiikawaMaster を Scan して照合し、該当アイテムを返す
 
-[EventBridge: cron(0 0 * * ? *)] → 毎日 9:00 JST
+[EventBridge: cron(0 0 ? * MON *)] → 毎週月曜 9:00 JST
     ▼
 [Lambda: chiikawa-scraper (Python 3.12)]
     │

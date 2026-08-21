@@ -6,17 +6,21 @@
 ## 構成
 - **frontend/** — Next.js 15 (App Router) + React 19 + Tailwind + AWS Amplify(Cognito認証)。Playwright e2e。
 - **lambda/api/** — Java 21 Lambda（SnapStart）。API Gateway HTTP API + Cognito JWT。
-- **lambda/scraper/** — Python 3.12 Lambda。元サイトを巡回し画像解析して DynamoDB に投入。EventBridge で毎日 9:00 JST 実行。
+- **lambda/scraper/** — Python 3.12 Lambda。元サイトを巡回し画像解析して DynamoDB に投入。EventBridge で毎週月曜 9:00 JST 実行。
 - **lambda/scanner/** — Python 3.12 Lambda。ユーザーが撮影/選択した写真からキャラ・地域・商品を認識し、
   該当する `ChiikawaMaster` アイテムを返す（`POST /scan`）。詳細は後述の「写真スキャン機能」を参照。
 - **terraform/** — DynamoDB・S3・CloudFront・Cognito 等の基盤。
 - **template.yaml** — SAM（Lambda / API Gateway / スケジュール）。
 
 ## AWS（重要）
-- アカウント: `<AWS_ACCOUNT_ID>`。IAMユーザー `shokun` は **Lambda実行・Bedrock・DynamoDB書込等の直接権限を持たない**。
+- アカウントIDはコード・ドキュメントに直書きしない（IaC は `${AWS::AccountId}` /
+  `data.aws_caller_identity`、スクリプトは `sts get-caller-identity` で解決する）。
+  手元で必要なときは `ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)`。
+- IAMユーザー `shokun` は **Lambda実行・Bedrock・DynamoDB書込等の直接権限を持たない**。
 - 権限が要る操作は **`bar504-admin` ロールにスイッチ**してから実行する:
   ```
-  aws sts assume-role --role-arn arn:aws:iam::<AWS_ACCOUNT_ID>:role/bar504-admin \
+  ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+  aws sts assume-role --role-arn "arn:aws:iam::${ACCOUNT_ID}:role/bar504-admin" \
     --role-session-name work --query Credentials
   # AccessKeyId / SecretAccessKey / SessionToken を環境変数にセットして実行
   ```

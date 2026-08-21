@@ -162,11 +162,12 @@ Resources:
                 - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/jp.anthropic.claude-haiku-4-5-20251001-v1:0"
                 - !Sub "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
       Events:
-        DailySchedule:
+        WeeklySchedule:
           Type: ScheduleV2
           Properties:
-            ScheduleExpression: "cron(0 0 * * ? *)"
-            Description: "毎日 9:00 JST にスクレイピング実行"
+            # 新商品はそう頻繁には出ないので、元サイトへの負荷を考えて週1回に抑える
+            ScheduleExpression: "cron(0 0 ? * MON *)"
+            Description: "毎週月曜 9:00 JST にスクレイピング実行"
 
   # ---------------------------------------------------------------------------
   # Scanner Lambda: Python 3.12 — ユーザー写真からキーホルダーを認識して返す
