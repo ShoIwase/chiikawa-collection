@@ -130,6 +130,11 @@ AWS 非依存の純粋関数群。DynamoDB や Bedrock を一切呼ばないの�
   で両方実行する。
 
 ## デプロイ
+- **SAM のパラメータは「既存スタックの値」が引き継がれる**。`template.yaml` の `Default:` を
+  書き換えても、既にデプロイ済みのスタックには反映されない（`sam deploy` は
+  `--parameter-overrides` に挙げなかったものを previous value として送るため）。
+  値を変えるときは `deploy-sam.yml` の `--parameter-overrides` に明示する。
+  （例: `FamilyId` を変えたのに Lambda の `FAMILY_ID` が古いまま、という形で踏んだ）
 - `main` への push で GitHub Actions が自動デプロイ:
   - `lambda/**` `template.yaml` 変更 → `deploy-sam.yml`（Java/Pythonテスト → SAM deploy）
   - `frontend/**` 変更 → `deploy-frontend.yml`

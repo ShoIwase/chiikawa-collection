@@ -81,6 +81,9 @@ jobs:
 
       - name: SAM Deploy
         run: |
+          # --parameter-overrides に挙げなかったパラメータは、テンプレートの Default では
+          # なく「既にデプロイ済みスタックの値」が引き継がれる。値を変えたいものは
+          # ここに明示すること（template.yaml の Default を書き換えるだけでは反映されない）。
           sam deploy \
             --no-confirm-changeset \
-            --parameter-overrides "DomainName=${{ secrets.DOMAIN_NAME }}"
+            --parameter-overrides "DomainName=${{ secrets.DOMAIN_NAME }} FamilyId=family"
