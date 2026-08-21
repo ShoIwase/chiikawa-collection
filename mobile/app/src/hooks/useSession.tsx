@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import { signIn as cognitoSignIn } from "../auth";
+import { SHARED_USERNAME } from "../config";
 
 const STORAGE_KEY = "chiikawa_id_token";
 
@@ -8,7 +9,7 @@ type Session = {
   idToken: string | null;
   isLoggedIn: boolean;
   isBootstrapping: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (password: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -24,8 +25,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsBootstrapping(false));
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const tokens = await cognitoSignIn(username, password);
+  const login = useCallback(async (password: string) => {
+    const tokens = await cognitoSignIn(SHARED_USERNAME, password);
     await AsyncStorage.setItem(STORAGE_KEY, tokens.idToken);
     setIdToken(tokens.idToken);
   }, []);

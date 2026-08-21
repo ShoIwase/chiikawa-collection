@@ -3,3 +3,6 @@ export const IMAGE_BASE_URL = "https://chiikawa.bar504.net";
 
 export const COGNITO_REGION = "ap-northeast-1";
 export const COGNITO_CLIENT_ID = "1i4seu4r15vshbg9fr7b22vesr";
+
+// 家族全員が同じアカウントを共有するため、ユーザー名は固定(frontend/src/app/login/page.tsx と同じ)
+export const SHARED_USERNAME = "family";
