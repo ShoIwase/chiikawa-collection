@@ -86,4 +86,5 @@ jobs:
           # ここに明示すること（template.yaml の Default を書き換えるだけでは反映されない）。
           sam deploy \
             --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
             --parameter-overrides "DomainName=${{ secrets.DOMAIN_NAME }} FamilyId=family"

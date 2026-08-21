@@ -130,6 +130,11 @@ AWS 非依存の純粋関数群。DynamoDB や Bedrock を一切呼ばないの�
   で両方実行する。
 
 ## デプロイ
+- **API Lambda は SnapStart + `AutoPublishAlias: live`**。API Gateway が向くのは
+  `$LATEST` ではなく **live エイリアスが指すバージョン**なので、設定を変えたら
+  エイリアスが新しいバージョンを指しているか確認する
+  （`aws lambda list-aliases --function-name chiikawa-api`）。
+  コード無変更＝新バージョン未発行になるのを防ぐため `AutoPublishAliasAllProperties: true` を付けている。
 - **SAM のパラメータは「既存スタックの値」が引き継がれる**。`template.yaml` の `Default:` を
   書き換えても、既にデプロイ済みのスタックには反映されない（`sam deploy` は
   `--parameter-overrides` に挙げなかったものを previous value として送るため）。

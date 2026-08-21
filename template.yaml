@@ -79,6 +79,10 @@ Resources:
       SnapStart:
         ApplyOn: PublishedVersions
       AutoPublishAlias: live
+      # コードを変えずに環境変数だけ変えた場合も新しいバージョンを発行してエイリアスを
+      # 進める。これが無いと live エイリアスが古い設定のバージョンを指したままになる
+      # （FAMILY_ID を変えたのに旧値のまま配信され続ける事故を実際に起こした）。
+      AutoPublishAliasAllProperties: true
       Policies:
         - AWSLambdaBasicExecutionRole
         - Version: "2012-10-17"
