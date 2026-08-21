@@ -189,16 +189,21 @@ _CHAR_CELLS = {
     "ハチワレ": (0.366, 0.654, 0.505),
     "うさぎ": (0.654, 0.935, 0.792),
 }
-_CROP_Y_CENTER = 0.55   # 柄の縦中心（鎖を上に、名前ラベルとキャプションを下に外す）
-_CROP_SIDE_RATIO = 0.28  # 正方形の一辺（画像幅に対する比）。最も狭いセル(ハチワレ)に収まる幅
+# 縦は「柄の上端〜名前ラベルの下端」を収める帯。実測では柄の上端 y=245..283、
+# ラベル下端 y=452..463、その下 y=480.. がキャプション帯（700x600 換算）。
+_CROP_TOP_RATIO = 0.40     # y=240。鎖を上に外しつつ、最も背の高い柄も切らない
+_CROP_BOTTOM_RATIO = 0.78  # y=468。名前ラベルは入れ、キャプション帯は外す
+_CROP_WIDTH_RATIO = 0.28   # 窓の横幅（画像幅に対する比）。最も狭いセル(ハチワレ)に収まる幅
+_PAD_COLOR = (255, 255, 255)  # 元画像の背景と同じ白
 
 
 def crop_character(image_data: bytes, content_type: str, character: str) -> bytes:
-    """3キャラ横並び画像から、指定キャラの柄を中心にした正方形を切り出して返す。
+    """3キャラ横並び画像から、指定キャラの柄と名前ラベルを切り出した正方形を返す。
 
     一覧でどのキャラのエントリか一目で分かるようにするための加工。
+    切り出す帯は縦長（柄＋名前ラベル）なので、左右に白を足して正方形に整える。
     正方形なのでカードの正方形サムネに柄がきれいに収まる。
-    切り出し窓は該当キャラのセル内にクランプするので、隣のキャラが端に写り込まない。
+    横の窓は該当キャラのセル内にクランプするので、隣のキャラが端に写り込まない。
     対象外キャラや失敗時は元画像をそのまま返す（フォールバック）。
     """
     cell = _CHAR_CELLS.get(character)
@@ -213,12 +218,19 @@ def crop_character(image_data: bytes, content_type: str, character: str) -> byte
         width, height = im.size
         cell_left = int(width * left_ratio)
         cell_right = int(width * right_ratio)
-        side = min(int(width * _CROP_SIDE_RATIO), cell_right - cell_left, height)
+        win_w = min(int(width * _CROP_WIDTH_RATIO), cell_right - cell_left)
         cx = int(width * cx_ratio)
-        cy = int(height * _CROP_Y_CENTER)
-        left = max(cell_left, min(cell_right - side, cx - side // 2))
-        top = max(0, min(height - side, cy - side // 2))
-        crop = im.crop((left, top, left + side, top + side))
+        left = max(cell_left, min(cell_right - win_w, cx - win_w // 2))
+        top = int(height * _CROP_TOP_RATIO)
+        bottom = min(height, int(height * _CROP_BOTTOM_RATIO))
+        win_h = bottom - top
+
+        # 帯（縦長）を切り出し、白でパディングして正方形にする。
+        # 元画像に透過があっても白地に合成されるよう、マスク付きで貼る。
+        band = im.crop((left, top, left + win_w, bottom)).convert("RGBA")
+        side = max(win_w, win_h)
+        crop = Image.new("RGB", (side, side), _PAD_COLOR)
+        crop.paste(band, ((side - win_w) // 2, (side - win_h) // 2), band)
 
         fmt = im.format
         if not fmt:

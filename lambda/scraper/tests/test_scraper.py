@@ -332,6 +332,10 @@ class TestCropCharacter:
     ]
     _LABEL_SPANS = [(64, 245), (267, 447), (469, 648)]
 
+    # 帯は y=240..468 を切り出し、横 196px を白パディングして 228x228 の正方形にする
+    _SIDE = int(600 * 0.78) - int(600 * 0.40)  # 228
+    _LABEL_TOP, _LABEL_BOTTOM = 428, 464
+
     def _three_charm_png(self) -> bytes:
         """実測レイアウトを模した 700x600 PNG。
 
@@ -345,7 +349,7 @@ class TestCropCharacter:
         for (_, color, cx_ratio), (x0, x1) in zip(self._CHARMS, self._LABEL_SPANS):
             cx = int(700 * cx_ratio)
             im.paste(color, (cx - 60, cy - 60, cx + 60, cy + 60))  # 120x120 の柄
-            im.paste(color, (x0, 428, x1 + 1, 464))               # 名前ラベル(柄より広い)
+            im.paste(color, (x0, self._LABEL_TOP, x1 + 1, self._LABEL_BOTTOM))  # 名前ラベル(柄より広い)
         buf = io.BytesIO(); im.save(buf, format="PNG")
         return buf.getvalue()
 
@@ -353,12 +357,29 @@ class TestCropCharacter:
         Image = pytest.importorskip("PIL.Image")
         import io
         data = self._three_charm_png()
-        side = int(700 * 0.28)  # 196
+        side = self._SIDE
         # 各キャラの柄中心が切り抜きの中心(=側長/2)に来て、その色になる
         for character, color, _ in self._CHARMS:
             crop = Image.open(io.BytesIO(crop_character(data, "image/png", character))).convert("RGB")
             assert crop.size == (side, side)  # 正方形
             assert crop.getpixel((side // 2, side // 2)) == color
+
+    def test_crop_keeps_name_label_and_pads_sides(self):
+        """名前ラベルまで収め、足りない横幅は白パディングで正方形にすること。"""
+        Image = pytest.importorskip("PIL.Image")
+        import io
+        data = self._three_charm_png()
+        side = self._SIDE
+        band_w = int(700 * 0.28)  # 196
+        pad = (side - band_w) // 2
+        for character, color, _ in self._CHARMS:
+            crop = Image.open(io.BytesIO(crop_character(data, "image/png", character))).convert("RGB")
+            # 自キャラの名前ラベルが写っている（帯の縦位置 428..464 は切り出し原点 240 からの相対）
+            label_y = (self._LABEL_TOP + self._LABEL_BOTTOM) // 2 - int(600 * 0.40)
+            assert crop.getpixel((side // 2, label_y)) == color
+            # 左右のパディングは白
+            for x in list(range(pad)) + list(range(side - pad, side)):
+                assert crop.getpixel((x, side // 2)) == (255, 255, 255)
 
     def test_crop_excludes_neighbor_characters(self):
         """隣のキャラ（柄・名前ラベルとも）が切り抜きの中に1pxも入らないこと。"""
