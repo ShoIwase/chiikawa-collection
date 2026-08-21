@@ -14,7 +14,7 @@ Parameters:
     Default: UserCollection
   FamilyId:
     Type: String
-    Default: shoiwase
+    Default: family
   # Terraform が SSM に書き込んだ値を参照
   CognitoUserPoolId:
     Type: AWS::SSM::Parameter::Value<String>
@@ -72,7 +72,7 @@ Resources:
     Properties:
       FunctionName: chiikawa-api
       CodeUri: lambda/api/
-      Handler: com.shoiwase.chiikawa.api.ApiHandler
+      Handler: net.bar504.chiikawa.api.ApiHandler
       Runtime: java21
       MemorySize: 512
       Timeout: 30

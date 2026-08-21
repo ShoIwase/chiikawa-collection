@@ -1,11 +1,11 @@
-package com.shoiwase.chiikawa.api;
+package net.bar504.chiikawa.api;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
-import com.shoiwase.chiikawa.api.route.CollectionRoute;
-import com.shoiwase.chiikawa.api.route.MasterRoute;
+import net.bar504.chiikawa.api.route.CollectionRoute;
+import net.bar504.chiikawa.api.route.MasterRoute;
 
 import java.util.Map;
 

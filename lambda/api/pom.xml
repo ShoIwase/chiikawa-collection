@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.shoiwase.chiikawa</groupId>
+  <groupId>net.bar504.chiikawa</groupId>
   <artifactId>chiikawa-api</artifactId>
   <version>1.0.0</version>
   <packaging>jar</packaging>
@@ -105,7 +105,7 @@
           <systemPropertyVariables>
             <MASTER_TABLE>ChiikawaMaster</MASTER_TABLE>
             <COLLECTION_TABLE>UserCollection</COLLECTION_TABLE>
-            <FAMILY_ID>shoiwase</FAMILY_ID>
+            <FAMILY_ID>family</FAMILY_ID>
           </systemPropertyVariables>
           <!-- 既定の filesystem 順はOS依存で不定。再現性のため固定する -->
           <runOrder>alphabetical</runOrder>

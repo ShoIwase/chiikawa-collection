@@ -1,3 +1,3 @@
 domain_name            = "example.net"
-chiikawa_family_id     = "shoiwase"
+chiikawa_family_id     = "family"
 chiikawa_test_password = "ChangeMe1!"  # GitHub Secrets: CHIIKAWA_TEST_PASSWORD

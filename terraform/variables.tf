@@ -11,7 +11,7 @@ variable "domain_name" {
 variable "chiikawa_family_id" {
   type        = string
   description = "UserCollection テーブルの共有ファミリーID"
-  default     = "shoiwase"
+  default     = "family"
 }
 
 variable "chiikawa_test_password" {

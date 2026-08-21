@@ -40,7 +40,7 @@
 - 属性: `Motif`(キャラ), `AreaType`, `AreaName`, `Prefecture`(所属都道府県の正式名・正規化済み),
   `ImageUrl`(/images/xxx), `IsVerified`, `CreatedAt`,
   `Tags`(String Set・自動付与＋手動編集), `SourceImageId`(元画像の数値ID・増分スキップ用)。
-- `UserCollection`: PK=`FamilyID`("shoiwase"), SK=`ItemName`, `Status`(所持), `UpdatedAt`。
+- `UserCollection`: PK=`FamilyID`("family"), SK=`ItemName`, `Status`(所持), `UpdatedAt`。
 
 ### 命名規約（ItemName）
 `{キャラ}　{地域 モチーフ}　ダイカットキーホルダー`（全角スペース区切り、キャラ先頭）

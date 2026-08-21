@@ -1,4 +1,4 @@
-package com.shoiwase.chiikawa.api.route;
+package net.bar504.chiikawa.api.route;
 
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;

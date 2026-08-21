@@ -1,10 +1,10 @@
-package com.shoiwase.chiikawa.api.route;
+package net.bar504.chiikawa.api.route;
 
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.shoiwase.chiikawa.api.Db;
+import net.bar504.chiikawa.api.Db;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
@@ -14,8 +14,8 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.shoiwase.chiikawa.api.ApiHandler.ok;
-import static com.shoiwase.chiikawa.api.ApiHandler.err;
+import static net.bar504.chiikawa.api.ApiHandler.ok;
+import static net.bar504.chiikawa.api.ApiHandler.err;
 
 public class CollectionRoute {
 

@@ -1,4 +1,4 @@
-package com.shoiwase.chiikawa.api.route;
+package net.bar504.chiikawa.api.route;
 
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
@@ -62,7 +62,7 @@ class CollectionRouteTest {
                 "CreatedAt",  av("2026-01-01T00:00:00Z")
         );
         var collectionItem = Map.of(
-                "FamilyID", av("shoiwase"),
+                "FamilyID", av("family"),
                 "ItemName", av("北海道 ダイカットキーホルダー"),
                 "Status",   AttributeValue.fromBool(true),
                 "UpdatedAt",av("2026-06-01T00:00:00Z")

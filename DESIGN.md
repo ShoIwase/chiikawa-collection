@@ -140,7 +140,7 @@ alias "live" ← バージョン管理で SnapStart が有効になる
 
 | 属性 | 型 | 説明 |
 |---|---|---|
-| `FamilyID` (PK) | String | 家族共有ID (固定値: `"shoiwase"`) |
+| `FamilyID` (PK) | String | 家族共有ID (固定値: `"family"`) |
 | `ItemName` (SK) | String | ChiikawaMaster の SK と一致 |
 | `Status` | Boolean | `true`=所持 / `false`=未所持 |
 | `UpdatedAt` | String | ISO 8601 |

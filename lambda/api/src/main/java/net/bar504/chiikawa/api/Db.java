@@ -1,4 +1,4 @@
-package com.shoiwase.chiikawa.api;
+package net.bar504.chiikawa.api;
 
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;

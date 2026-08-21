@@ -6,6 +6,9 @@ dist/
 package/
 __pycache__/
 *.pyc
+
+# Maven (lambda/api)
+target/
 .env
 .env.local
 .DS_Store

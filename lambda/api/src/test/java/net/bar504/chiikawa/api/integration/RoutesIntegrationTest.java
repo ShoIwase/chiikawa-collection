@@ -1,10 +1,10 @@
-package com.shoiwase.chiikawa.api.integration;
+package net.bar504.chiikawa.api.integration;
 
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.shoiwase.chiikawa.api.route.CollectionRoute;
-import com.shoiwase.chiikawa.api.route.MasterRoute;
+import net.bar504.chiikawa.api.route.CollectionRoute;
+import net.bar504.chiikawa.api.route.MasterRoute;
 import org.junit.jupiter.api.*;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -26,7 +26,7 @@ class RoutesIntegrationTest {
 
     static final String MASTER_TABLE     = "ChiikawaMaster";
     static final String COLLECTION_TABLE = "UserCollection";
-    static final String FAMILY_ID        = "shoiwase";
+    static final String FAMILY_ID        = "family";
 
     @Container
     static GenericContainer<?> dynamoDbLocal =
